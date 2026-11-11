@@ -800,3 +800,126 @@ input:focus-visible {
     scroll-behavior: auto;
   }
 }
+
+/* Source-labelled ratings and accessible public rating controls. */
+.rating-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 16px 0;
+}
+.rating-list .rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.rating-list .rating small {
+  font-size: 9px;
+  font-weight: 650;
+}
+.rating-google {
+  background: #f1f4eb;
+  color: #536a3f;
+}
+.rating-community {
+  background: #eaf2ef;
+  color: #37685c;
+}
+.rating-panel {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 13px;
+  background: #fbfcf9;
+}
+.modal .rating-panel {
+  margin: 13px 0;
+}
+.modal .rating-panel > h3 {
+  margin-bottom: 9px;
+}
+.rating-source {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid #edf1ec;
+}
+.rating-source strong {
+  color: var(--ink);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.rating-source > span {
+  text-align: right;
+}
+.rating-picker {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  padding: 0;
+  margin: 12px 0 9px;
+}
+.rating-picker legend {
+  width: 100%;
+  margin-bottom: 4px;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+.rating-picker label {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+}
+.rating-picker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.rating-picker label > span[aria-hidden="true"] {
+  color: #b8c4b7;
+  font-size: 26px;
+  line-height: 1;
+  transition: color 120ms ease, transform 120ms ease;
+}
+.rating-picker input:checked + span[aria-hidden="true"],
+.rating-picker label:hover > span[aria-hidden="true"] {
+  color: #d69a24;
+}
+.rating-picker input:focus-visible + span[aria-hidden="true"] {
+  outline: 3px solid #a5c36d;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.rating-status {
+  margin: 8px 0 0 !important;
+  font-size: 10px !important;
+}
+.rating-status.success {
+  color: #3d704d !important;
+}
+.rating-status.error {
+  color: #a94638 !important;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+@media (max-width: 520px) {
+  .rating-source {
+    align-items: flex-start;
+  }
+  .rating-source > span {
+    max-width: 65%;
+  }
+}

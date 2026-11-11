@@ -1,7 +1,14 @@
 (() => {
   "use strict";
   const $ = (selector) => document.querySelector(selector);
-  const state = { cafes: [], filter: "all", location: null, detailRequest: 0 };
+  const state = {
+    cafes: [],
+    filter: "all",
+    location: null,
+    detailRequest: 0,
+    ratingDeviceId: "",
+    userRatings: loadUserRatings(),
+  };
   const esc = (value) =>
     String(value ?? "").replace(
       /[&<>"']/g,
@@ -21,6 +28,44 @@
     Number.isFinite(Number(value))
       ? Number(value)
       : null;
+  function loadUserRatings() {
+    try {
+      const value = JSON.parse(localStorage.getItem("nyambung-user-ratings") || "{}");
+      return value && typeof value === "object" && !Array.isArray(value)
+        ? value
+        : {};
+    } catch {
+      return {};
+    }
+  }
+  function ratingDeviceId() {
+    if (state.ratingDeviceId) return state.ratingDeviceId;
+    try {
+      const saved = localStorage.getItem("nyambung-rating-device");
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(saved || ""))
+        return (state.ratingDeviceId = saved);
+      state.ratingDeviceId = crypto.randomUUID();
+      localStorage.setItem("nyambung-rating-device", state.ratingDeviceId);
+    } catch {
+      state.ratingDeviceId = crypto.randomUUID();
+    }
+    return state.ratingDeviceId;
+  }
+  function saveUserRating(cafeId, rating) {
+    state.userRatings[String(cafeId)] = rating;
+    try {
+      localStorage.setItem(
+        "nyambung-user-ratings",
+        JSON.stringify(state.userRatings),
+      );
+    } catch {
+      // The rating is still saved on the server; this cache only remembers the device's choice.
+    }
+  }
+  const displayedRating = (cafe) =>
+    num(cafe.nyambungRatingCount) > 0
+      ? num(cafe.nyambungRating)
+      : num(cafe.googleRating);
   const speed = (value, unit) =>
     num(value) === null ? "—" : `${Math.round(num(value))} ${unit}`;
   const labels = {
@@ -187,13 +232,23 @@
         const rank = { many: 4, some: 3, varies: 2, few: 1, unknown: 0 };
         return (rank[b.outlets] || 0) - (rank[a.outlets] || 0);
       }
-      if (mode === "rating") return (num(b.rating) || 0) - (num(a.rating) || 0);
+      if (mode === "rating")
+        return (num(b.nyambungRating) || 0) - (num(a.nyambungRating) || 0);
+      if (mode === "google-rating")
+        return (num(b.googleRating) || 0) - (num(a.googleRating) || 0);
       return (
-        (num(b.rating) || 0) * 30 +
+        (displayedRating(b) || 0) * 30 +
         (num(b.down) || 0) * 0.025 -
-        ((num(a.rating) || 0) * 30 + (num(a.down) || 0) * 0.025)
+        ((displayedRating(a) || 0) * 30 + (num(a.down) || 0) * 0.025)
       );
     });
+  }
+  function ratingMarkup(cafe) {
+    const google = num(cafe.googleRating);
+    const community = num(cafe.nyambungRating);
+    const communityCount = num(cafe.nyambungRatingCount) || 0;
+    if (google === null && !communityCount) return "";
+    return `<div class="rating-list" aria-label="Rating dari sumber berbeda">${google === null ? "" : `<span class="rating rating-google">★ ${google.toFixed(1)} <small>Google Maps</small></span>`}${communityCount ? `<span class="rating rating-community">★ ${(community || 0).toFixed(1)} <small>Nyambung · ${communityCount}</small></span>` : ""}</div>`;
   }
   function card(cafe) {
     const download = num(cafe.down),
@@ -202,7 +257,7 @@
       state.location && c
         ? `<span class="distance">${distance(state.location, c).toFixed(1)} km</span>`
         : "";
-    return `<article class="cafe-card">${photoMarkup(cafe)}<div class="card-heading"><button class="card-title" type="button" data-detail="${esc(cafe.id)}"><strong>${esc(cafe.name || "Tanpa nama")}</strong><span>${esc(cafe.area || "Area belum dicatat")} ${km}</span></button>${num(cafe.rating) !== null ? `<span class="rating">★ ${esc(num(cafe.rating).toFixed(1))}</span>` : ""}</div><div class="speed"><strong>${download === null ? "—" : Math.round(download)}</strong><span>Mbps download</span>${download !== null && download >= 50 ? "<b>Wi-Fi cepat</b>" : ""}</div><div class="tags"><span>${esc(label("outlets", cafe.outlets))}</span><span>${esc(label("prayer", cafe.prayer))}</span></div><div class="card-footer"><button class="detail-link" type="button" data-detail="${esc(cafe.id)}">Lihat detail →</button><span class="password ${cafe.hasPassword ? "available" : ""}">${cafe.hasPassword ? "Password tercatat" : "Password belum dicatat"}</span><a href="${esc(mapUrl(cafe))}" target="_blank" rel="noopener">Arah ↗</a></div></article>`;
+    return `<article class="cafe-card">${photoMarkup(cafe)}<div class="card-heading"><button class="card-title" type="button" data-detail="${esc(cafe.id)}"><strong>${esc(cafe.name || "Tanpa nama")}</strong><span>${esc(cafe.area || "Area belum dicatat")} ${km}</span></button></div>${ratingMarkup(cafe)}<div class="speed"><strong>${download === null ? "—" : Math.round(download)}</strong><span>Mbps download</span>${download !== null && download >= 50 ? "<b>Wi-Fi cepat</b>" : ""}</div><div class="tags"><span>${esc(label("outlets", cafe.outlets))}</span><span>${esc(label("prayer", cafe.prayer))}</span></div><div class="card-footer"><button class="detail-link" type="button" data-detail="${esc(cafe.id)}">Lihat detail →</button><span class="password ${cafe.hasPassword ? "available" : ""}">${cafe.hasPassword ? "Password tercatat" : "Password belum dicatat"}</span><a href="${esc(mapUrl(cafe))}" target="_blank" rel="noopener">Arah ↗</a></div></article>`;
   }
   function render() {
     updateAreas();
@@ -242,8 +297,27 @@
       const tested = detail.testedAt
         ? `<p class="tested-note">Pengukuran tersimpan · ${esc(new Date(detail.testedAt).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }))}. Ini bukan tes langsung perangkatmu.</p>`
         : "";
+      const googleRating = num(detail.googleRating);
+      const googleRatingCount = num(detail.googleRatingCount);
+      const communityRating = num(detail.nyambungRating);
+      const communityCount = num(detail.nyambungRatingCount) || 0;
+      const myRating = Number(state.userRatings[String(detail.id)]) || 0;
+      const ratingOptions = [1, 2, 3, 4, 5]
+        .map(
+          (value) =>
+            `<label><input type="radio" name="communityRating" value="${value}" ${myRating === value ? "checked" : ""} required><span aria-hidden="true">★</span><span class="visually-hidden">${value} dari 5 bintang</span></label>`,
+        )
+        .join("");
+      const googleSummary =
+        googleRating === null
+          ? "Belum ada data Google Maps"
+          : `★ ${googleRating.toFixed(1)}/5 · ${googleRatingCount === null ? "jumlah ulasan tidak diketahui" : `${googleRatingCount} ulasan`}`;
+      const communitySummary = communityCount
+        ? `★ ${(communityRating || 0).toFixed(1)}/5 · ${communityCount} rating pengguna`
+        : "Belum ada rating pengguna";
+      const ratingPanel = `<section class="rating-panel" aria-labelledby="ratingPanelTitle"><h3 id="ratingPanelTitle">Rating dari dua sumber</h3><p class="rating-source"><strong>Google Maps</strong><span>${esc(googleSummary)}</span></p><p class="rating-source"><strong>Nyambung</strong><span><b id="nyambungAggregate">${esc(communityCount ? `★ ${(communityRating || 0).toFixed(1)}/5` : "—")}</b> <span id="nyambungCount">${esc(communityCount ? `· ${communityCount} rating pengguna` : "· Belum ada rating pengguna")}</span></span></p><form id="ratingForm" data-cafe-id="${esc(detail.id)}"><fieldset class="rating-picker"><legend>Beri rating Nyambung</legend>${ratingOptions}</fieldset><button class="secondary-button" type="submit">${myRating ? "Perbarui rating" : "Kirim rating"}</button><p id="ratingStatus" class="rating-status" role="status" aria-live="polite">${myRating ? `Ratingmu saat ini ${myRating}/5; kamu dapat mengubahnya.` : "Satu rating per browser; rating Google Maps tidak berubah."}</p></form></section>`;
       $("#detailContent").innerHTML =
-        `<button class="modal-close" type="button" data-close aria-label="Tutup detail">×</button>${photoMarkup(detail, true)}<p class="eyebrow">DETAIL SPOT</p><h2 id="detailTitle">${esc(detail.name || cafe.name)}</h2><p class="detail-area">${esc(detail.area || "")}${detail.hours ? ` · ${esc(detail.hours)}` : ""}</p><div class="detail-stats"><div><strong>${speed(detail.down, "Mbps")}</strong><span>Download</span></div><div><strong>${speed(detail.up, "Mbps")}</strong><span>Upload</span></div><div><strong>${speed(detail.ping, "ms")}</strong><span>Ping</span></div></div><section><h3>Fasilitas & suasana</h3><p>${esc(label("outlets", detail.outlets))} · ${esc(label("prayer", detail.prayer))} · ${esc(label("stability", detail.stability))}${detail.comfort ? ` · Kenyamanan ${esc(detail.comfort)}/5` : ""}${detail.smoking ? ` · ${esc(detail.smoking)}` : ""}</p></section><section><h3>Wi-Fi</h3>${wifi}${provider}${tested}<p>Data berdasarkan catatan kunjungan dan dapat berubah.</p></section><div class="modal-actions"><a class="primary-button" href="${esc(mapUrl(detail))}" target="_blank" rel="noopener">Buka petunjuk arah ↗</a><button class="secondary-button" type="button" data-close>Tutup</button></div>`;
+        `<button class="modal-close" type="button" data-close aria-label="Tutup detail">×</button>${photoMarkup(detail, true)}<p class="eyebrow">DETAIL SPOT</p><h2 id="detailTitle">${esc(detail.name || cafe.name)}</h2><p class="detail-area">${esc(detail.area || "")}${detail.hours ? ` · ${esc(detail.hours)}` : ""}</p>${ratingPanel}<div class="detail-stats"><div><strong>${speed(detail.down, "Mbps")}</strong><span>Download</span></div><div><strong>${speed(detail.up, "Mbps")}</strong><span>Upload</span></div><div><strong>${speed(detail.ping, "ms")}</strong><span>Ping</span></div></div><section><h3>Fasilitas & suasana</h3><p>${esc(label("outlets", detail.outlets))} · ${esc(label("prayer", detail.prayer))} · ${esc(label("stability", detail.stability))}${detail.comfort ? ` · Kenyamanan ${esc(detail.comfort)}/5` : ""}${detail.smoking ? ` · ${esc(detail.smoking)}` : ""}</p></section><section><h3>Wi-Fi</h3>${wifi}${provider}${tested}<p>Data berdasarkan catatan kunjungan dan dapat berubah.</p></section><div class="modal-actions"><a class="primary-button" href="${esc(mapUrl(detail))}" target="_blank" rel="noopener">Buka petunjuk arah ↗</a><button class="secondary-button" type="button" data-close>Tutup</button></div>`;
       $("#revealPassword")?.addEventListener("click", () => {
         $("#wifiPassword").hidden = false;
         $("#revealPassword").hidden = true;
@@ -322,6 +396,58 @@
     if (detail) showDetail(detail.dataset.detail);
     if (event.target.closest("[data-close]") && $("#detailModal").open)
       $("#detailModal").close();
+  });
+  document.addEventListener("submit", async (event) => {
+    const form = event.target.closest("#ratingForm");
+    if (!form) return;
+    event.preventDefault();
+    const cafeId = form.dataset.cafeId;
+    const rating = Number(
+      form.querySelector('input[name="communityRating"]:checked')?.value,
+    );
+    const button = form.querySelector('[type="submit"]');
+    const status = form.querySelector("#ratingStatus");
+    button.disabled = true;
+    status.textContent = "Menyimpan rating…";
+    status.className = "rating-status";
+    try {
+      const response = await fetch(
+        `/api/cafes/${encodeURIComponent(cafeId)}/rating`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+            "X-Nyambung-Rating": "1",
+          },
+          body: JSON.stringify({ ratingId: ratingDeviceId(), rating }),
+        },
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok)
+        throw new Error(data.error || `Rating gagal disimpan (${response.status}).`);
+      saveUserRating(cafeId, rating);
+      const cafe = state.cafes.find((item) => String(item.id) === String(cafeId));
+      if (cafe) {
+        cafe.nyambungRating = data.nyambungRating;
+        cafe.nyambungRatingCount = data.nyambungRatingCount;
+      }
+      render();
+      if ($("#ratingForm")?.dataset.cafeId === cafeId) {
+        $("#nyambungAggregate").textContent = `★ ${Number(data.nyambungRating).toFixed(1)}/5`;
+        $("#nyambungCount").textContent = `· ${data.nyambungRatingCount} rating pengguna`;
+        $("#ratingStatus").textContent =
+          data.message || "Rating Nyambung tersimpan. Terima kasih!";
+        $("#ratingStatus").className = "rating-status success";
+        $("#ratingForm [type=submit]").textContent = "Perbarui rating";
+      }
+    } catch (error) {
+      status.textContent = error.message || "Rating gagal disimpan. Coba lagi.";
+      status.className = "rating-status error";
+    } finally {
+      button.disabled = false;
+    }
   });
   $("#detailModal").addEventListener("click", (event) => {
     if (event.target === event.currentTarget) event.currentTarget.close();

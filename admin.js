@@ -71,7 +71,7 @@
       ? cafes
           .map(
             (c) =>
-              `<article class="cafe-row"><label class="row-check"><input type="checkbox" data-select="${esc(c.id)}" ${state.selected.has(String(c.id)) ? "checked" : ""} aria-label="Pilih ${esc(c.name)}"></label><div class="cafe-info"><strong>${esc(c.name)}</strong><span>${esc(c.area || "Area belum dicatat")} · ${c.down != null ? `${esc(c.down)} Mbps` : "Wi-Fi belum dicatat"}${c.provider ? ` · ${esc(c.provider)}` : ""}${c.hasPassword ? " · password publik" : ""}</span></div><div class="row-actions"><button type="button" data-edit="${esc(c.id)}">Edit</button><button class="danger" type="button" data-delete="${esc(c.id)}">Hapus</button></div></article>`,
+              `<article class="cafe-row"><label class="row-check"><input type="checkbox" data-select="${esc(c.id)}" ${state.selected.has(String(c.id)) ? "checked" : ""} aria-label="Pilih ${esc(c.name)}"></label><div class="cafe-info"><strong>${esc(c.name)}</strong><span>${esc(c.area || "Area belum dicatat")} · ${c.down != null ? `${esc(c.down)} Mbps` : "Wi-Fi belum dicatat"}${c.provider ? ` · ${esc(c.provider)}` : ""}${c.googleRating != null ? ` · Maps ${esc(c.googleRating)}` : ""}${c.nyambungRatingCount ? ` · Nyambung ${esc(c.nyambungRating)} (${esc(c.nyambungRatingCount)})` : ""}${c.hasPassword ? " · password publik" : ""}</span></div><div class="row-actions"><button type="button" data-edit="${esc(c.id)}">Edit</button><button class="danger" type="button" data-delete="${esc(c.id)}">Hapus</button></div></article>`,
           )
           .join("")
       : '<div class="empty">Tidak ada kafe yang cocok.</div>';
@@ -124,12 +124,14 @@
     revokePreview();
     const f = $("#cafeForm");
     f.reset();
+    window.__NyambungAdmin?.resetMapResolver?.();
     $("#formTitle").textContent = cafe ? "Edit kafe" : "Tambah kafe";
     f.elements.id.value = cafe?.id || "";
     const fields = [
       "name",
       "area",
-      "rating",
+      "googleRating",
+      "googleRatingCount",
       "price",
       "down",
       "up",
@@ -189,7 +191,8 @@
     const testedAt = String(f.elements.testedAt.value || "").trim();
     if (testedAt) d.testedAt = toUtcIso(testedAt);
     [
-      "rating",
+      "googleRating",
+      "googleRatingCount",
       "price",
       "down",
       "up",

@@ -178,6 +178,9 @@ try {
   assert.ok(ready, `Local Worker not ready: ${sanitize(logs.slice(-6000))}`);
   const seeded = await list();
   assert.equal(seeded.length, 27);
+  assert.equal(seeded.find((cafe) => cafe.id === "agna")?.googleRating, 4.2);
+  assert.ok(seeded.every((cafe) => cafe.nyambungRatingCount === 0));
+  assert.ok(seeded.every((cafe) => "googleRating" in cafe));
   assert.ok(
     seeded.every((cafe) => !("password" in cafe) && !("wifiPassword" in cafe)),
   );
@@ -251,6 +254,15 @@ try {
     400,
   );
   assert.equal((await list()).length, 27);
+  assert.equal(
+    (
+      await api("/api/admin/cafes", {
+        method: "POST",
+        body: { ...cafeInput("Invalid review count"), googleRatingCount: 1.5 },
+      })
+    ).response.status,
+    400,
+  );
   console.log(
     "PASS: coordinates, URLs, and photo keys are validated without writing invalid rows.",
   );
@@ -307,6 +319,8 @@ try {
       latitude: -6.226,
       longitude: 106.852,
       provider: "Penyedia uji lokal",
+      googleRating: 4.7,
+      googleRatingCount: 55,
       testedAt: new Date().toISOString(),
       jitter: 2.5,
     },
@@ -316,7 +330,74 @@ try {
   assert.equal(aPublic.photoUrl, uploaded.data.photoUrl);
   assert.equal(aPublic.latitude, -6.226);
   assert.equal(aPublic.provider, "Penyedia uji lokal");
+  assert.equal(aPublic.googleRating, 4.7);
+  assert.equal(aPublic.googleRatingCount, 55);
+  assert.equal(aPublic.nyambungRatingCount, 0);
   assert.ok(!("wifiPassword" in aPublic) && !("password" in aPublic));
+  assert.equal(
+    (
+      await api(`/api/cafes/${a.data.id}/rating`, {
+        method: "POST",
+        body: { ratingId: randomUUID(), rating: 5 },
+        headers: { "X-Nyambung-Rating": "1" },
+        origin: false,
+        authenticated: false,
+      })
+    ).response.status,
+    403,
+  );
+  assert.equal(
+    (
+      await api(`/api/cafes/${a.data.id}/rating`, {
+        method: "POST",
+        body: { ratingId: randomUUID(), rating: 6 },
+        headers: { "X-Nyambung-Rating": "1" },
+        authenticated: false,
+      })
+    ).response.status,
+    400,
+  );
+  const ratingDevice = randomUUID();
+  const firstRating = await api(`/api/cafes/${a.data.id}/rating`, {
+    method: "POST",
+    body: { ratingId: ratingDevice, rating: 4 },
+    headers: { "X-Nyambung-Rating": "1" },
+    authenticated: false,
+  });
+  assert.equal(firstRating.response.status, 200);
+  assert.equal(firstRating.data.nyambungRating, 4);
+  assert.equal(firstRating.data.nyambungRatingCount, 1);
+  const updatedRating = await api(`/api/cafes/${a.data.id}/rating`, {
+    method: "POST",
+    body: { ratingId: ratingDevice, rating: 5 },
+    headers: { "X-Nyambung-Rating": "1" },
+    authenticated: false,
+  });
+  assert.equal(updatedRating.data.nyambungRatingCount, 1);
+  const secondRating = await api(`/api/cafes/${a.data.id}/rating`, {
+    method: "POST",
+    body: { ratingId: randomUUID(), rating: 3 },
+    headers: { "X-Nyambung-Rating": "1" },
+    authenticated: false,
+  });
+  assert.equal(secondRating.data.nyambungRating, 4);
+  assert.equal(secondRating.data.nyambungRatingCount, 2);
+  const afterRatings = (await api(`/api/cafes/${a.data.id}`)).data;
+  assert.equal(afterRatings.googleRating, 4.7);
+  assert.equal(afterRatings.nyambungRating, 4);
+  assert.equal(afterRatings.nyambungRatingCount, 2);
+  const adminA = (await api("/api/admin/cafes")).data.find(
+    (cafe) => cafe.id === a.data.id,
+  );
+  const editedCafe = await api(`/api/admin/cafes/${a.data.id}`, {
+    method: "PUT",
+    body: { ...adminA, googleRating: 4.8, googleRatingCount: 56 },
+  });
+  assert.equal(editedCafe.response.status, 200);
+  const afterAdminEdit = (await api(`/api/cafes/${a.data.id}`)).data;
+  assert.equal(afterAdminEdit.googleRating, 4.8);
+  assert.equal(afterAdminEdit.nyambungRating, 4);
+  assert.equal(afterAdminEdit.nyambungRatingCount, 2);
   assert.equal(
     (
       await api("/api/admin/photos", {

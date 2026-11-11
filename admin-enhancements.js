@@ -38,8 +38,19 @@
         f.elements.latitude.value = data.latitude;
       if (data.longitude !== null && data.longitude !== undefined)
         f.elements.longitude.value = data.longitude;
+      if (data.googleRating !== null && data.googleRating !== undefined)
+        f.elements.googleRating.value = data.googleRating;
+      if (
+        data.googleRatingCount !== null &&
+        data.googleRatingCount !== undefined
+      )
+        f.elements.googleRatingCount.value = data.googleRatingCount;
       lastResolvedUrl = url;
-      mapStatus.textContent = `Terisi: ${data.name || "nama tempat"} · ${data.area || "area belum terbaca"}${data.latitude != null ? " · koordinat tersedia" : ""}. Periksa sebelum menyimpan.`;
+      const googleRating =
+        data.googleRating == null
+          ? "rating Google belum terbaca"
+          : `Google Maps ★ ${Number(data.googleRating).toFixed(1)}${data.googleRatingCount == null ? "" : ` · ${data.googleRatingCount} ulasan`}`;
+      mapStatus.textContent = `Terisi: ${data.name || "nama tempat"} · ${data.area || "area belum terbaca"}${data.latitude != null ? " · koordinat tersedia" : ""} · ${googleRating}. Semua isian dapat diedit; periksa sebelum menyimpan.`;
       mapStatus.className = "field-status success";
     } catch (e) {
       mapStatus.textContent = e.message || "Tautan Maps tidak dapat dibaca.";
@@ -47,7 +58,7 @@
     } finally {
       resolving = false;
       mapButton.disabled = false;
-      mapButton.textContent = "Isi nama & area otomatis";
+      mapButton.textContent = "Impor dari Google Maps";
     }
   }
   mapButton?.addEventListener("click", resolveMap);
@@ -56,6 +67,13 @@
   });
   mapInput?.addEventListener("paste", () => setTimeout(resolveMap, 80));
   mapInput?.addEventListener("change", resolveMap);
+  window.__NyambungAdmin = window.__NyambungAdmin || {};
+  window.__NyambungAdmin.resetMapResolver = () => {
+    lastResolvedUrl = "";
+    mapStatus.textContent =
+      "Tempel tautan Google Maps untuk mengisi data tempat secara otomatis; periksa sebelum menyimpan.";
+    mapStatus.className = "field-status";
+  };
   $("#useCurrentLocation")?.addEventListener("click", () => {
     const b = $("#useCurrentLocation"),
       s = mapStatus;

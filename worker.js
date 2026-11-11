@@ -157,6 +157,13 @@ function sameOriginMutation(request) {
   );
 }
 
+function sameOriginRatingMutation(request) {
+  return Boolean(
+    request.headers.get("Origin") === new URL(request.url).origin &&
+      request.headers.get("X-Nyambung-Rating") === "1",
+  );
+}
+
 async function readJson(request, limit = 20000) {
   const size = Number(request.headers.get("content-length") || 0);
   if (size > limit) throw new Error("Ukuran data terlalu besar.");
@@ -228,13 +235,23 @@ function normalizeCafe(input) {
   const longitude = nullableNumber(input.longitude, "Bujur", -180, 180);
   if ((latitude === null) !== (longitude === null))
     throw new Error("Isi lintang dan bujur bersama, atau kosongkan keduanya.");
+  const googleRating = nullableNumber(input.googleRating, "Rating Google Maps", 0, 5);
+  const googleRatingCount = nullableNumber(
+    input.googleRatingCount,
+    "Jumlah ulasan Google Maps",
+    0,
+    100000000,
+  );
+  if (googleRatingCount !== null && !Number.isInteger(googleRatingCount))
+    throw new Error("Jumlah ulasan Google Maps harus berupa bilangan bulat.");
   const testedAtInput = text(input.testedAt, "Waktu tes", 50);
   if (testedAtInput && !Number.isFinite(Date.parse(testedAtInput)))
     throw new Error("Waktu tes tidak valid.");
   return {
     name,
     area,
-    rating: nullableNumber(input.rating, "Rating", 0, 5),
+    googleRating,
+    googleRatingCount,
     down: nullableNumber(input.down, "Kecepatan download", 0, 100000),
     up: nullableNumber(input.up, "Kecepatan upload", 0, 100000),
     ping: nullableNumber(input.ping, "Ping", 0, 100000),
@@ -276,7 +293,10 @@ function publicCafe(row) {
     id: row.id,
     name: row.name,
     area: row.area,
-    rating: row.rating,
+    googleRating: row.google_rating,
+    googleRatingCount: row.google_rating_count,
+    nyambungRating: row.nyambung_rating ?? 0,
+    nyambungRatingCount: row.nyambung_rating_count ?? 0,
     down: row.down_mbps,
     up: row.up_mbps,
     ping: row.ping_ms,
@@ -316,7 +336,8 @@ function adminCafe(row) {
 const CAFE_SAVE_COLUMNS = [
   "name",
   "area",
-  "rating",
+  "google_rating",
+  "google_rating_count",
   "down_mbps",
   "up_mbps",
   "ping_ms",
@@ -342,6 +363,8 @@ const CAFE_SAVE_COLUMNS = [
 const CAFE_COLUMNS = [
   "id",
   ...CAFE_SAVE_COLUMNS,
+  "nyambung_rating",
+  "nyambung_rating_count",
   "created_at",
   "updated_at",
 ].join(", ");
@@ -349,7 +372,8 @@ function cafeDbValues(cafe) {
   return [
     cafe.name,
     cafe.area,
-    cafe.rating,
+    cafe.googleRating,
+    cafe.googleRatingCount,
     cafe.down,
     cafe.up,
     cafe.ping,
@@ -407,12 +431,13 @@ function coordinatesFromMapsUrl(url) {
   const exact = [
     ...url.href.matchAll(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/g),
   ].pop();
+  const at = [...url.href.matchAll(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g)].pop();
   const query = (
     url.searchParams.get("q") ||
     url.searchParams.get("query") ||
     ""
   ).match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
-  const pair = exact || query;
+  const pair = exact || at || query;
   if (!pair) return { latitude: null, longitude: null };
   const latitude = Number(pair[1]),
     longitude = Number(pair[2]);
@@ -484,6 +509,115 @@ function placeFromMapsUrl(url, originalUrl) {
   };
 }
 
+function decodeHtml(value) {
+  return String(value || "")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&#x27;/gi, "'");
+}
+
+async function limitedText(response, maxBytes = 800000) {
+  const declaredLength = Number(response.headers.get("Content-Length") || 0);
+  if (declaredLength > maxBytes) {
+    await response.body?.cancel();
+    throw mapsError("Halaman Google Maps terlalu besar untuk dibaca.", 502);
+  }
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw mapsError("Halaman Google Maps terlalu besar untuk dibaca.", 502);
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+function googlePreviewHref(html, baseUrl) {
+  const match = String(html || "").match(
+    /<link\b[^>]*href=["']([^"']*\/maps\/preview\/place[^"']*)["']/i,
+  );
+  if (!match) return null;
+  try {
+    return new URL(decodeHtml(match[1]), baseUrl);
+  } catch {
+    return null;
+  }
+}
+
+function parseGooglePreview(payload) {
+  const result = {
+    googleRating: null,
+    googleRatingCount: null,
+    latitude: null,
+    longitude: null,
+  };
+  let root;
+  try {
+    root = JSON.parse(String(payload || "").replace(/^\)\]\}'(?:\r?\n)?/, ""));
+  } catch {
+    return result;
+  }
+  const isReviewCount = (value) =>
+    typeof value === "string" && /^\d[\d,.]*\s+(?:reviews?|ulasan)$/i.test(value.trim());
+  function visit(node) {
+    if (!Array.isArray(node)) return;
+    if (
+      result.latitude === null &&
+      node.length >= 4 &&
+      node[0] === null &&
+      node[1] === null &&
+      typeof node[2] === "number" &&
+      typeof node[3] === "number" &&
+      Math.abs(node[2]) <= 90 &&
+      Math.abs(node[3]) <= 180
+    ) {
+      result.latitude = node[2];
+      result.longitude = node[3];
+    }
+    if (result.googleRating === null) {
+      const summaryIndex = node.findIndex(
+        (child) => Array.isArray(child) && child.some(isReviewCount),
+      );
+      if (summaryIndex >= 0) {
+        const summary = node[summaryIndex].find(isReviewCount);
+        const countFromLabel = Number(
+          summary?.match(/[\d,.]+/)?.[0]?.replace(/[,.]/g, ""),
+        );
+      const rating = Number(node[summaryIndex + 4]);
+      const count = Number(node[summaryIndex + 5]);
+      if (
+        Number.isFinite(rating) &&
+        rating >= 0 &&
+        rating <= 5 &&
+        Number.isInteger(count) &&
+        count >= 0
+      ) {
+        result.googleRating = rating;
+          result.googleRatingCount = Number.isInteger(count)
+            ? count
+            : countFromLabel || null;
+        }
+      }
+    }
+    for (const child of node) visit(child);
+  }
+  visit(root);
+  return result;
+}
+
 async function resolveGoogleMapsPlace(rawUrl) {
   if (!rawUrl || rawUrl.length > 500)
     throw mapsError("Tautan Maps kosong atau terlalu panjang.");
@@ -496,55 +630,99 @@ async function resolveGoogleMapsPlace(rawUrl) {
   if (!googleMapsHostAllowed(current))
     throw mapsError("Gunakan tautan Google Maps atau maps.app.goo.gl.");
   const originalUrl = current.href;
-  let response = null;
-  const shortLink =
-    current.hostname === "maps.app.goo.gl" || current.hostname === "goo.gl";
-  if (shortLink) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
-    try {
-      for (let hop = 0; hop < 5; hop++) {
-        if (!googleMapsHostAllowed(current))
-          throw mapsError("Tautan mengarah ke alamat yang tidak didukung.");
-        response = await fetch(current.href, {
-          method: "GET",
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  let place = null;
+  try {
+    let response = null;
+    for (let hop = 0; hop < 6; hop++) {
+      if (!googleMapsHostAllowed(current))
+        throw mapsError("Tautan mengarah ke alamat yang tidak didukung.");
+      try {
+        place = placeFromMapsUrl(current, originalUrl);
+      } catch {
+        // A short link may not contain place data until its first redirect.
+      }
+      response = await fetch(current.href, {
+        method: "GET",
+        redirect: "manual",
+        headers: { Accept: "text/html,application/xhtml+xml" },
+        signal: controller.signal,
+      });
+      if (response.status < 300 || response.status >= 400) break;
+      const location = response.headers.get("Location");
+      if (!location) break;
+      current = new URL(location, current);
+      if (!googleMapsHostAllowed(current))
+        throw mapsError("Tautan mengarah ke alamat yang tidak didukung.");
+      try {
+        place = placeFromMapsUrl(current, originalUrl);
+      } catch {
+        // Continue resolving until Google exposes a place name or address.
+      }
+    }
+    if (!googleMapsHostAllowed(current))
+      throw mapsError("Tautan mengarah ke alamat yang tidak didukung.");
+    if (!response || response.status >= 400)
+      if (place)
+        return {
+          ...place,
+          googleRating: null,
+          googleRatingCount: null,
+        };
+      else throw mapsError("Google Maps menolak tautan tersebut.", 502);
+
+    const html = await limitedText(response);
+    place = place || placeFromMapsUrl(current, originalUrl);
+    const previewUrl = googlePreviewHref(html, current.href);
+    let rating = {
+      googleRating: null,
+      googleRatingCount: null,
+      latitude: null,
+      longitude: null,
+    };
+    if (previewUrl && googleMapsHostAllowed(previewUrl)) {
+      try {
+        const previewResponse = await fetch(previewUrl.href, {
           redirect: "manual",
-          headers: { Accept: "text/html,application/xhtml+xml" },
+          headers: { Accept: "application/json,text/plain,*/*" },
           signal: controller.signal,
         });
-        if (response.status < 300 || response.status >= 400) break;
-        const location = response.headers.get("Location");
-        if (!location) break;
-        current = new URL(location, current);
-        const candidate =
-          current.searchParams.get("q") ||
-          current.searchParams.get("query") ||
-          current.searchParams.get("destination") ||
-          current.searchParams.get("daddr") ||
-          "";
-        if (
-          candidate &&
-          !/^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?$/.test(candidate.trim())
-        )
-          return placeFromMapsUrl(current, originalUrl);
+        if (previewResponse.ok) {
+          const previewBody = await limitedText(previewResponse);
+          rating = parseGooglePreview(previewBody);
+        }
+      } catch {
+        // Keep the name and location usable if Google's preview data is unavailable.
       }
-    } catch (error) {
-      if (error.status) throw error;
-      throw mapsError(
-        error?.name === "AbortError"
-          ? "Google Maps tidak merespons tepat waktu."
-          : "Tautan Google Maps tidak dapat dibuka.",
-        502,
-      );
-    } finally {
-      clearTimeout(timeout);
     }
-    if (response && response.status >= 400)
-      throw mapsError("Google Maps menolak tautan tersebut.", 502);
+    const mapCoordinates = previewUrl
+      ? coordinatesFromMapsUrl(previewUrl)
+      : { latitude: null, longitude: null };
+    return {
+      ...place,
+      latitude: place.latitude ?? rating.latitude ?? mapCoordinates.latitude,
+      longitude: place.longitude ?? rating.longitude ?? mapCoordinates.longitude,
+      googleRating: rating.googleRating,
+      googleRatingCount: rating.googleRatingCount,
+    };
+  } catch (error) {
+    if (error.status && !(error.status >= 500 && place)) throw error;
+    if (place)
+      return {
+        ...place,
+        googleRating: null,
+        googleRatingCount: null,
+      };
+    throw mapsError(
+      error?.name === "AbortError"
+        ? "Google Maps tidak merespons tepat waktu."
+        : "Tautan Google Maps tidak dapat dibaca.",
+      502,
+    );
+  } finally {
+    clearTimeout(timeout);
   }
-  if (!googleMapsHostAllowed(current))
-    throw mapsError("Tautan mengarah ke alamat yang tidak didukung.");
-  return placeFromMapsUrl(current, originalUrl);
 }
 
 async function loginIpHash(request, env) {
@@ -753,13 +931,13 @@ async function bulkDeleteCafes(request, env) {
     const chunk = ids.slice(index, index + 90);
     statements.push(
       env.DB.prepare(
-        `DELETE FROM cafes WHERE id IN (${chunk.map(() => "?").join(",")})`,
+        `DELETE FROM cafes WHERE id IN (${chunk.map(() => "?").join(",")}) RETURNING id`,
       ).bind(...chunk),
     );
   }
   const results = await env.DB.batch(statements);
   const deleted = results.reduce(
-    (sum, result) => sum + Number(result.meta?.changes || 0),
+    (sum, result) => sum + Number(result.results?.length || 0),
     0,
   );
   let photoCleanupWarning = false;
@@ -809,6 +987,67 @@ async function handleApi(request, env) {
         error.status || 422,
       );
     }
+  }
+
+  const ratingMatch = path.match(/^\/api\/cafes\/([^/]+)\/rating$/);
+  if (ratingMatch && method === "POST") {
+    if (!sameOriginRatingMutation(request))
+      return json({ error: "Permintaan rating tidak valid." }, 403);
+    let body;
+    try {
+      body = await readJson(request);
+    } catch (error) {
+      return json({ error: error.message || "Data rating tidak valid." }, 400);
+    }
+    if (
+      typeof body.ratingId !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        body.ratingId,
+      ) ||
+      !Number.isInteger(body.rating) ||
+      body.rating < 1 ||
+      body.rating > 5
+    )
+      return json({ error: "Pilih rating 1 sampai 5 bintang." }, 400);
+    let cafeId;
+    try {
+      cafeId = decodeURIComponent(ratingMatch[1]);
+    } catch {
+      return json({ error: "Kafe tidak ditemukan." }, 404);
+    }
+    const exists = await env.DB.prepare("SELECT id FROM cafes WHERE id = ?")
+      .bind(cafeId)
+      .first();
+    if (!exists) return json({ error: "Kafe tidak ditemukan." }, 404);
+    const voterHash = b64url(
+      new Uint8Array(
+        await crypto.subtle.sign(
+          "HMAC",
+          await sessionKey(env),
+          encoder.encode(`nyambung-rating-v1:${body.ratingId}`),
+        ),
+      ),
+    );
+    const now = new Date().toISOString();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO cafe_ratings (cafe_id, voter_hash, rating, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(cafe_id, voter_hash) DO UPDATE SET rating = excluded.rating, updated_at = excluded.updated_at",
+      ).bind(cafeId, voterHash, body.rating, now, now),
+      env.DB.prepare(
+        "UPDATE cafes SET nyambung_rating = (SELECT ROUND(AVG(rating), 1) FROM cafe_ratings WHERE cafe_id = ?), nyambung_rating_count = (SELECT COUNT(*) FROM cafe_ratings WHERE cafe_id = ?) WHERE id = ?",
+      ).bind(cafeId, cafeId, cafeId),
+    ]);
+    const aggregate = await env.DB.prepare(
+      "SELECT nyambung_rating, nyambung_rating_count FROM cafes WHERE id = ?",
+    )
+      .bind(cafeId)
+      .first();
+    return json({
+      yourRating: body.rating,
+      nyambungRating: Number(aggregate?.nyambung_rating || 0),
+      nyambungRatingCount: Number(aggregate?.nyambung_rating_count || 0),
+      message: "Rating Nyambung tersimpan. Terima kasih!",
+    });
   }
 
   if (path === "/api/cafes" && method === "GET") {

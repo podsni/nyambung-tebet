@@ -91,12 +91,19 @@
           <label>Nama kafe *<input name="name" required maxlength="70" /></label
           ><label>Area *<input name="area" required maxlength="70" /></label
           ><label
-            >Rating<input
-              name="rating"
+            >Rating Google Maps<input
+              name="googleRating"
               type="number"
               min="0"
               max="5"
               step="0.1" /></label
+          ><label
+            >Jumlah ulasan Google Maps<input
+              name="googleRatingCount"
+              type="number"
+              min="0"
+              max="100000000"
+              step="1" /></label
           ><label
             >Harga (ribu)<input
               name="price"
@@ -203,7 +210,7 @@
               maxlength="500"
               placeholder="Tempel tautan Maps" /></label
           ><button id="resolveMapButton" class="secondary-action" type="button">
-            Isi nama & area otomatis
+            Impor dari Google Maps
           </button>
         </div>
         <p
@@ -212,8 +219,8 @@
           role="status"
           aria-live="polite"
         >
-          Tempel tautan Maps atau tekan tombol untuk mengisi nama, area, dan
-          koordinat.
+          Tempel tautan Google Maps untuk mengisi nama, area, koordinat, dan
+          rating Google jika tersedia. Periksa dan edit dulu sebelum menyimpan.
         </p>
         <div class="location-fields">
           <label

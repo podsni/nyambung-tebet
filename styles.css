@@ -11,6 +11,9 @@
 * {
   box-sizing: border-box;
 }
+[hidden] {
+  display: none !important;
+}
 html {
   scroll-behavior: smooth;
 }
@@ -122,6 +125,10 @@ a {
   padding: 0 14px;
   max-width: 510px;
   box-shadow: 0 5px 20px rgba(27, 54, 37, 0.04);
+}
+.directory-search {
+  max-width: none;
+  margin: 14px 0 10px;
 }
 .search-box span {
   font-size: 23px;
@@ -284,6 +291,8 @@ a {
   font-size: 10px;
 }
 .cafe-photo img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;

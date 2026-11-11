@@ -1,10 +1,12 @@
 (() => {
   "use strict";
   const $ = (selector) => document.querySelector(selector);
+  const TEBET_FALLBACK = Object.freeze({ lat: -6.2265, lon: 106.8515 });
   const state = {
     cafes: [],
     filter: "all",
-    location: null,
+    location: { ...TEBET_FALLBACK },
+    locationSource: "tebet",
     detailRequest: 0,
     ratingDeviceId: "",
     userRatings: loadUserRatings(),
@@ -255,7 +257,7 @@
       c = coords(cafe);
     const km =
       state.location && c
-        ? `<span class="distance">${distance(state.location, c).toFixed(1)} km</span>`
+        ? `<span class="distance" title="${state.locationSource === "tebet" ? "Perkiraan jarak dari pusat Tebet" : "Jarak garis lurus perkiraan dari lokasimu"}">${state.locationSource === "tebet" ? "~" : ""}${distance(state.location, c).toFixed(1)} km</span>`
         : "";
     return `<article class="cafe-card">${photoMarkup(cafe)}<div class="card-heading"><button class="card-title" type="button" data-detail="${esc(cafe.id)}"><strong>${esc(cafe.name || "Tanpa nama")}</strong><span>${esc(cafe.area || "Area belum dicatat")} ${km}</span></button></div>${ratingMarkup(cafe)}<div class="speed"><strong>${download === null ? "—" : Math.round(download)}</strong><span>Mbps download</span>${download !== null && download >= 50 ? "<b>Wi-Fi cepat</b>" : ""}</div><div class="tags"><span>${esc(label("outlets", cafe.outlets))}</span><span>${esc(label("prayer", cafe.prayer))}</span></div><div class="card-footer"><button class="detail-link" type="button" data-detail="${esc(cafe.id)}">Lihat detail →</button><span class="password ${cafe.hasPassword ? "available" : ""}">${cafe.hasPassword ? "Password tercatat" : "Password belum dicatat"}</span><a href="${esc(mapUrl(cafe))}" target="_blank" rel="noopener">Arah ↗</a></div></article>`;
   }
@@ -268,6 +270,8 @@
       ? "Terdekat (aktifkan lokasi)"
       : !hasCoordinates
         ? "Terdekat (koordinat belum ada)"
+        : state.locationSource === "tebet"
+          ? "Terdekat dari Tebet (perkiraan)"
         : "Terdekat";
     if (nearest.disabled && $("#sortSelect").value === "nearest")
       $("#sortSelect").value = "recommended";
@@ -343,52 +347,83 @@
   function locate() {
     const status = $("#locationStatus"),
       button = $("#locationButton");
+    const useTebetFallback = (message) => {
+      state.location = { ...TEBET_FALLBACK };
+      state.locationSource = "tebet";
+      $("#clearLocation").hidden = true;
+      status.textContent = `${message} Jarak tetap diperkirakan dari pusat Tebet, Jakarta; gunakan lokasi saya untuk hasil yang lebih akurat.`;
+      if (state.cafes.some((cafe) => coords(cafe)))
+        $("#sortSelect").value = "nearest";
+      render();
+    };
     if (!navigator.geolocation || !window.isSecureContext) {
-      status.textContent =
-        "Lokasi memerlukan browser yang mendukung izin lokasi dan HTTPS.";
+      useTebetFallback(
+        "Browser ini tidak mendukung lokasi atau halaman tidak dibuka lewat HTTPS.",
+      );
       return;
     }
     button.disabled = true;
     status.textContent = "Meminta izin lokasi…";
-    const fail = (error) => {
+    const succeed = (position) => {
+      const lat = position?.coords?.latitude,
+        lon = position?.coords?.longitude;
+      if (
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lon) ||
+        Math.abs(lat) > 90 ||
+        Math.abs(lon) > 180
+      ) {
+        fail({ code: 2 }, false);
+        return;
+      }
       button.disabled = false;
-      state.location = null;
-      $("#clearLocation").hidden = true;
+      state.location = { lat, lon };
+      state.locationSource = "device";
+      $("#clearLocation").hidden = false;
+      const known = state.cafes.some((cafe) => coords(cafe));
+      const accuracy = Number.isFinite(position.coords.accuracy)
+        ? ` (akurasi ±${Math.round(position.coords.accuracy)} m)`
+        : "";
+      status.textContent = known
+        ? `Lokasi perangkat aktif${accuracy}. Jarak garis lurus ditampilkan; koordinatmu hanya dipakai di tab ini dan tidak disimpan.`
+        : `Lokasi perangkat aktif${accuracy}, tetapi koordinat kafe belum dilengkapi. Lokasi hanya dipakai di tab ini dan tidak disimpan.`;
+      if (known) $("#sortSelect").value = "nearest";
+      render();
+    };
+    const fail = (error, canRetry = true) => {
+      if (canRetry && (error.code === 2 || error.code === 3)) {
+        status.textContent =
+          "GPS belum tersedia; mencoba lokasi jaringan dengan konsumsi daya lebih rendah…";
+        try {
+          navigator.geolocation.getCurrentPosition(
+            succeed,
+            (retryError) => fail(retryError, false),
+            { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
+          );
+          return;
+        } catch {
+          // Use the neighborhood fallback if the browser rejects the retry.
+        }
+      }
       const message =
         error.code === 1
-          ? "Izin lokasi ditolak."
+          ? "Izin lokasi ditolak. Aktifkan izin lokasi untuk situs ini di pengaturan browser jika ingin mencoba lagi."
           : error.code === 2
-            ? "Lokasi tidak tersedia."
+            ? "Lokasi perangkat tidak tersedia."
             : error.code === 3
-              ? "Permintaan lokasi melewati batas waktu."
-              : "Gagal meminta lokasi. Periksa izin browser.";
-      status.textContent = `${message} Kamu tetap bisa memakai direktori tanpa lokasi.`;
-      render();
+              ? "Pencarian lokasi melewati batas waktu."
+              : "Lokasi perangkat gagal dideteksi. Periksa izin browser.";
+      button.disabled = false;
+      useTebetFallback(message);
     };
     try {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
-          button.disabled = false;
-          state.location = {
-            lat: position.coords.latitude,
-            lon: position.coords.longitude,
-          };
-          $("#clearLocation").hidden = false;
-          const known = state.cafes.some((cafe) => coords(cafe));
-          const accuracy = Number.isFinite(position.coords.accuracy)
-            ? ` (akurasi ±${Math.round(position.coords.accuracy)} m)`
-            : "";
-          status.textContent = known
-            ? `Lokasi aktif${accuracy}. Jarak perkiraan ditampilkan; lokasi tidak disimpan.`
-            : `Lokasi aktif${accuracy}. Koordinat kafe belum dilengkapi; tombol Arah tetap memakai lokasimu.`;
-          if (known) $("#sortSelect").value = "nearest";
-          render();
-        },
+        succeed,
         fail,
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
       );
     } catch {
-      fail({ code: 0 });
+      fail({ code: 0 }, false);
     }
   }
   document.addEventListener("click", (event) => {
@@ -471,9 +506,11 @@
   $("#clearFilters").addEventListener("click", reset);
   $("#locationButton").addEventListener("click", locate);
   $("#clearLocation").addEventListener("click", () => {
-    state.location = null;
+    state.location = { ...TEBET_FALLBACK };
+    state.locationSource = "tebet";
     $("#clearLocation").hidden = true;
-    $("#locationStatus").textContent = "Lokasi dihapus dari tab ini.";
+    $("#locationStatus").textContent =
+      "Lokasi perangkat dihapus dari tab ini. Jarak kembali diperkirakan dari pusat Tebet, Jakarta.";
     render();
   });
   async function init() {

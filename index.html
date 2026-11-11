@@ -9,9 +9,9 @@
       content="Direktori kafe nyaman untuk kerja di Tebet."
     />
     <title>Nyambung — Direktori kafe Tebet</title>
-    <link rel="stylesheet" href="styles.css?v=maps-ratings-1" />
+    <link rel="stylesheet" href="styles.css?v=location-responsive-1" />
     <script src="speedtest.js" defer></script>
-    <script src="app.js?v=maps-ratings-1" defer></script>
+    <script src="app.js?v=location-responsive-1" defer></script>
     <script src="public-speedtest.js" defer></script>
   </head>
   <body>
@@ -134,17 +134,17 @@
                 <option value="rating">Rating Nyambung</option>
                 <option value="google-rating">Rating Google Maps</option>
                 <option value="name">Nama A–Z</option>
-                <option value="nearest">Terdekat</option>
+                <option value="nearest" selected>Terdekat dari Tebet (perkiraan)</option>
               </select></label
-            ><button id="locationButton" class="location-button" type="button">
-              Gunakan lokasi</button
+            ><button id="locationButton" class="location-button" type="button" aria-describedby="locationStatus">
+              Gunakan lokasi saya</button
             ><button
               id="clearLocation"
               class="text-button"
               type="button"
               hidden
             >
-              Hapus lokasi
+              Hapus lokasi saya
             </button>
           </div>
         </div>
@@ -162,7 +162,7 @@
           class="location-status"
           role="status"
           aria-live="polite"
-        ></p>
+        >Jarak diperkirakan dari pusat Tebet, Jakarta. Gunakan lokasi saya untuk jarak yang lebih akurat.</p>
         <div
           class="filters"
           id="filterRow"

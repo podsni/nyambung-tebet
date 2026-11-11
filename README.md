@@ -6,7 +6,7 @@ Direktori kafe yang nyaman untuk kerja, dibuat untuk layar ponsel. Situs live: *
 
 - Pencarian, filter fasilitas, pengurutan Wi-Fi, rating Nyambung atau Google Maps, detail tempat, dan tautan Maps.
 - Foto pada kartu dan detail. Admin dapat menempel URL HTTPS langsung atau mengunggah JPEG/PNG/WebP; foto dioptimalkan di browser dan disimpan di R2. Tempat tanpa foto menampilkan placeholder yang jujur.
-- Lokasi saat ini hanya diminta setelah tombol ditekan. Lokasi berada di memori tab, dapat dihapus, dan dipakai untuk jarak perkiraan serta arah perjalanan. Urutan terdekat memerlukan koordinat kafe yang sudah dilengkapi admin.
+- Lokasi perangkat hanya diminta setelah tombol ditekan. Jika izin ditolak atau GPS tidak merespons, jarak dan urutan terdekat memakai titik perkiraan pusat Tebet, Jakarta; kartu menandai jarak tersebut sebagai perkiraan. Koordinat perangkat hanya disimpan di memori tab, tidak dikirim ke server, dan tombol hapus mengembalikan tampilan ke titik Tebet. Jarak adalah garis lurus, bukan jarak rute; urutan terdekat memerlukan koordinat kafe yang sudah dilengkapi admin.
 - Speedtest HTTP Cloudflare dengan warm-up, beberapa sampel, progres, pembatalan, dan dua mode pemakaian data. Angka mengukur koneksi perangkat saat tes, bukan menguji Wi-Fi kafe dari jauh.
 - ISP/provider otomatis dari metadata jaringan publik/ASN bila tersedia. VPN/proxy dapat mengubah provider yang terlihat. Browser tidak dapat membaca nama Wi-Fi/SSID secara otomatis.
 - Admin dengan sesi HttpOnly, rate limit login, validasi origin, CRUD, dan impor dari tautan Google Maps. Nama, area, koordinat, rating Google, serta jumlah ulasan diisi bila terbaca, lalu tetap dapat ditinjau dan diedit sebelum disimpan.

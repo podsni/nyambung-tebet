@@ -193,6 +193,10 @@ a {
 .location-button:focus-visible {
   background: var(--soft);
 }
+.location-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
 .location-status {
   min-height: 18px;
   margin: 0 0 8px;
@@ -742,6 +746,11 @@ input:focus-visible {
 .speedtest-panel progress[hidden] {
   display: none;
 }
+@media (max-width: 900px) {
+  .cafe-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 @media (max-width: 760px) {
   .container {
     padding-top: 29px;
@@ -760,7 +769,7 @@ input:focus-visible {
     justify-content: flex-start;
   }
   .cafe-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .cafe-card {
     min-height: 300px;
@@ -916,6 +925,66 @@ input:focus-visible {
   border: 0;
 }
 @media (max-width: 520px) {
+  .header-inner {
+    height: 56px;
+    padding: 0 14px;
+  }
+  .container {
+    padding: 24px 14px 40px;
+  }
+  .intro {
+    padding-bottom: 28px;
+  }
+  .intro h1 {
+    font-size: clamp(30px, 9vw, 40px);
+    letter-spacing: -1.5px;
+  }
+  .cafe-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .directory-tools {
+    width: 100%;
+    justify-content: space-between;
+    gap: 6px;
+  }
+  .sort-control select {
+    max-width: 142px;
+  }
+  .location-button {
+    min-height: 44px;
+    padding: 9px 11px;
+    font-size: 11px;
+  }
+  .location-status {
+    min-height: 24px;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  .filter-line {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .data-note {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .site-footer {
+    flex-wrap: wrap;
+    padding: 16px 14px;
+  }
+  .modal {
+    width: calc(100% - 20px);
+    max-height: 88vh;
+  }
+  .modal > div {
+    padding: 18px;
+  }
+  .detail-photo {
+    margin: -18px -18px 16px;
+  }
+  .modal-actions {
+    flex-direction: column;
+  }
   .rating-source {
     align-items: flex-start;
   }

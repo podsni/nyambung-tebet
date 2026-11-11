@@ -1215,7 +1215,7 @@ async function lookupLocationArea(request) {
       properties.town ||
       properties.village;
     const regional =
-      properties.city || properties.county || properties.state || "";
+      properties.county || properties.city || properties.state || "";
     const label = [...new Set([local, regional].filter(Boolean).map((part) => String(part).trim()))]
       .filter(Boolean)
       .slice(0, 2)

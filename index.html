@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f7f8f5" />
+    <meta
+      name="description"
+      content="Direktori kafe nyaman untuk kerja di Tebet."
+    />
+    <title>Nyambung — Direktori kafe Tebet</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="speedtest.js" defer></script>
+    <script src="app.js" defer></script>
+    <script src="public-speedtest.js" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="index.html" aria-label="Nyambung beranda"
+          ><span class="brand-mark">↯</span
+          ><span>nyambung<span class="brand-dot">.</span></span></a
+        >
+        <span class="header-location">Tebet, Jakarta</span>
+      </div>
+    </header>
+    <main class="container">
+      <section class="intro" aria-labelledby="page-title">
+        <p class="eyebrow">DIREKTORI KERJA DI TEBET</p>
+        <h1 id="page-title">
+          Cari tempat yang<br /><em>nyambung</em> untuk fokus.
+        </h1>
+        <p class="intro-copy">
+          Temukan kafe dengan Wi-Fi, colokan, dan suasana yang cocok untuk
+          harimu.
+        </p>
+        <label class="search-box"
+          ><span aria-hidden="true">⌕</span
+          ><input
+            id="searchInput"
+            type="search"
+            placeholder="Cari nama kafe atau area…"
+            autocomplete="off"
+            aria-label="Cari nama kafe atau area"
+        /></label>
+      </section>
+      <section
+        id="speedtest"
+        class="speedtest-panel"
+        aria-labelledby="speedtest-title"
+      >
+        <div class="speedtest-copy">
+          <p class="eyebrow">TES KONEKSI DI PERANGKATMU</p>
+          <h2 id="speedtest-title">Cek kecepatan Wi-Fi.</h2>
+          <p>
+            Ukur download, upload, ping, dan kestabilan koneksi yang sedang kamu
+            pakai.
+          </p>
+        </div>
+        <div class="speedtest-action">
+          <label class="speedtest-mode"
+            >Mode
+            <select id="publicSpeedTestMode" aria-label="Mode speed test">
+              <option value="balanced" selected>Hemat data ≤25 MB</option>
+              <option value="thorough">Lebih akurat ≤60 MB</option>
+            </select></label
+          ><button
+            id="publicSpeedTestButton"
+            class="speedtest-button"
+            type="button"
+          >
+            Mulai tes kecepatan</button
+          ><button
+            id="publicSpeedTestCancel"
+            class="speedtest-cancel"
+            type="button"
+            hidden
+          >
+            Batalkan</button
+          ><progress
+            id="publicSpeedTestProgress"
+            max="100"
+            value="0"
+            hidden
+            aria-label="Progres speed test"
+          ></progress>
+        </div>
+        <p
+          id="publicSpeedTestStatus"
+          class="speedtest-status"
+          role="status"
+          aria-live="polite"
+        >
+          Tes memakai jaringan Cloudflare. Perkiraan pemakaian data mengikuti
+          mode yang dipilih.
+        </p>
+        <div id="publicSpeedTestResults" class="speedtest-results" hidden>
+          <div>
+            <strong
+              ><span id="publicDownload">—</span> <small>Mbps</small></strong
+            ><span>Download</span>
+          </div>
+          <div>
+            <strong><span id="publicUpload">—</span> <small>Mbps</small></strong
+            ><span>Upload</span>
+          </div>
+          <div>
+            <strong><span id="publicPing">—</span> <small>ms</small></strong
+            ><span>Ping ke Cloudflare</span>
+          </div>
+          <div>
+            <strong><span id="publicJitter">—</span> <small>ms</small></strong
+            ><span>Jitter</span>
+          </div>
+        </div>
+        <div class="speedtest-meta">
+          <p id="networkInfo">Info jaringan akan muncul setelah tersedia.</p>
+          <p id="publicTestSummary">
+            Hasil ini adalah tes langsung dari perangkatmu, bukan catatan kafe
+            tersimpan.
+          </p>
+        </div>
+        <p class="speedtest-note">
+          Perkiraan pemakaian data adalah batas panduan, bukan jaminan. Provider
+          dari IP publik dapat mencerminkan VPN. Browser tidak dapat membaca
+          nama Wi-Fi (SSID) secara otomatis.
+        </p>
+      </section>
+      <section id="cafes" aria-labelledby="directory-title">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">PILIHAN SEKITARMU</p>
+            <h2 id="directory-title">Spot buat fokus.</h2>
+          </div>
+          <div class="directory-tools">
+            <label class="sort-control"
+              >Urutkan
+              <select id="sortSelect" aria-label="Urutkan kafe">
+                <option value="recommended">Rekomendasi</option>
+                <option value="wifi">Wi-Fi tercepat</option>
+                <option value="upload">Upload tercepat</option>
+                <option value="outlets">Colokan terbanyak</option>
+                <option value="rating">Rating</option>
+                <option value="name">Nama A–Z</option>
+                <option value="nearest">Terdekat</option>
+              </select></label
+            ><button id="locationButton" class="location-button" type="button">
+              Gunakan lokasi</button
+            ><button
+              id="clearLocation"
+              class="text-button"
+              type="button"
+              hidden
+            >
+              Hapus lokasi
+            </button>
+          </div>
+        </div>
+        <p
+          id="locationStatus"
+          class="location-status"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <div
+          class="filters"
+          id="filterRow"
+          role="group"
+          aria-label="Filter kafe"
+        >
+          <button class="filter active" data-filter="all" type="button">
+            Semua</button
+          ><button class="filter" data-filter="fast" type="button">
+            Wi-Fi 50+ Mbps</button
+          ><button class="filter" data-filter="outlets" type="button">
+            Banyak colokan</button
+          ><button class="filter" data-filter="prayer" type="button">
+            Ada mushola</button
+          ><button class="filter" data-filter="late" type="button">
+            Buka lewat 22.00</button
+          ><button class="filter" data-filter="password" type="button">
+            Password tercatat
+          </button>
+        </div>
+        <div class="filter-line">
+          <label class="area-control"
+            >Area
+            <select id="areaSelect" aria-label="Pilih area">
+              <option value="all">Semua area</option>
+            </select></label
+          ><span id="resultCount" aria-live="polite">Memuat…</span
+          ><button id="clearFilters" class="text-button" type="button">
+            Reset
+          </button>
+        </div>
+        <div id="status" class="status" role="status" aria-live="polite">
+          Memuat data kafe…
+        </div>
+        <div id="cafeGrid" class="cafe-grid" aria-live="polite"></div>
+        <div id="emptyState" class="empty-state" hidden>
+          <strong>Belum menemukan spot.</strong
+          ><span>Coba kata kunci atau filter lain.</span>
+        </div>
+        <aside class="data-note">
+          <strong>Catatan data</strong
+          ><span
+            >Angka Wi-Fi adalah catatan kunjungan, bukan speedtest langsung.
+            Kondisi dapat berubah menurut waktu dan posisi duduk.</span
+          >
+        </aside>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <span>nyambung. · Tempat nyaman, koneksi lancar.</span
+      ><a href="admin.html">Admin</a>
+    </footer>
+    <dialog id="detailModal" class="modal" aria-labelledby="detailTitle">
+      <div id="detailContent"></div>
+    </dialog>
+  </body>
+</html>

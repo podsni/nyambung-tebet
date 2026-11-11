@@ -1,0 +1,18 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
+  "name": "nyambung-tebet",
+  "main": "./worker-embedded.js",
+  "compatibility_date": "2026-11-11",
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "nyambung-db",
+      "database_id": "REPLACE_WITH_YOUR_DATABASE_ID",
+      "migrations_dir": "./migrations",
+    },
+  ],
+  "r2_buckets": [
+    { "binding": "CAFE_PHOTOS", "bucket_name": "nyambung-photos" },
+  ],
+}

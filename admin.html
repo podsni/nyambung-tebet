@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#f7f8f5" />
+    <title>Admin — Nyambung</title>
+    <link rel="stylesheet" href="admin.css" />
+    <script src="speedtest.js" defer></script>
+    <script src="admin.js" defer></script>
+    <script src="admin-enhancements.js" defer></script>
+  </head>
+  <body>
+    <header class="admin-header">
+      <a class="brand" href="/"
+        ><span class="brand-mark">↯</span>nyambung<span>.</span></a
+      >
+      <div id="adminNav" hidden>
+        <a href="/">Lihat publik</a
+        ><button id="logoutButton" type="button">Keluar</button>
+      </div>
+    </header>
+    <main class="admin-main">
+      <section id="loginView" class="panel login-panel">
+        <p class="eyebrow">AREA ADMIN</p>
+        <h1>Kelola direktori kafe.</h1>
+        <p class="muted">
+          Masuk untuk menambah, memperbarui, atau menghapus data spot.
+        </p>
+        <form id="loginForm">
+          <label
+            >Password admin<input
+              id="loginPassword"
+              type="password"
+              autocomplete="current-password"
+              required /></label
+          ><button class="primary" type="submit">Masuk</button>
+          <p id="loginError" class="form-error" role="alert"></p>
+        </form>
+      </section>
+      <section id="dashboardView" hidden>
+        <div class="dashboard-head">
+          <div>
+            <p class="eyebrow">DASHBOARD</p>
+            <h1>Data kafe</h1>
+            <p class="muted">Perubahan tersimpan langsung ke database.</p>
+          </div>
+          <button id="newCafeButton" class="primary" type="button">
+            ＋ Tambah kafe
+          </button>
+        </div>
+        <div id="adminStatus" class="status" role="status" aria-live="polite">
+          Memuat data…
+        </div>
+        <div class="list-toolbar">
+          <label class="search-label"
+            >Cari kafe<input
+              id="cafeSearch"
+              type="search"
+              placeholder="Nama atau area…"
+          /></label>
+          <div class="selection-actions">
+            <label class="select-visible"
+              ><input id="selectAllVisible" type="checkbox" /> Pilih semua
+              terlihat</label
+            ><span id="selectedCount">0 dipilih</span
+            ><button
+              id="bulkDeleteButton"
+              class="danger-button"
+              type="button"
+              disabled
+            >
+              Hapus pilihan</button
+            ><button id="deleteAllButton" class="danger-outline" type="button">
+              Hapus semua data
+            </button>
+          </div>
+        </div>
+        <div id="cafeList" class="cafe-list"></div>
+      </section>
+    </main>
+    <dialog id="cafeDialog" class="dialog">
+      <form id="cafeForm" class="form">
+        <button class="close" type="button" data-close aria-label="Tutup">
+          ×
+        </button>
+        <p class="eyebrow">DATA KAFE</p>
+        <h2 id="formTitle">Tambah kafe</h2>
+        <input type="hidden" name="id" /><input type="hidden" name="photoKey" />
+        <div class="grid">
+          <label>Nama kafe *<input name="name" required maxlength="70" /></label
+          ><label>Area *<input name="area" required maxlength="70" /></label
+          ><label
+            >Rating<input
+              name="rating"
+              type="number"
+              min="0"
+              max="5"
+              step="0.1" /></label
+          ><label
+            >Harga (ribu)<input
+              name="price"
+              type="number"
+              min="0"
+              step="1" /></label
+          ><label
+            >Download (Mbps)<input
+              name="down"
+              type="number"
+              min="0"
+              step="0.1" /></label
+          ><label
+            >Upload (Mbps)<input
+              name="up"
+              type="number"
+              min="0"
+              step="0.1" /></label
+          ><label
+            >Ping (ms)<input
+              name="ping"
+              type="number"
+              min="0"
+              step="0.1" /></label
+          ><label
+            >Jitter (ms)<input
+              name="jitter"
+              type="number"
+              min="0"
+              step="0.1" /></label
+          ><label>Provider<input name="provider" maxlength="120" /></label
+          ><label
+            >Terakhir diuji<input
+              name="testedAt"
+              type="datetime-local" /></label
+          ><label
+            >Jam buka<input
+              name="hours"
+              maxlength="50"
+              placeholder="08:00–22:00" /></label
+          ><label
+            >Colokan<select name="outlets">
+              <option value="unknown">Belum dicek</option>
+              <option value="many">Banyak</option>
+              <option value="some">Sebagian</option>
+              <option value="few">Sedikit</option>
+              <option value="varies">Tergantung kursi</option>
+            </select></label
+          ><label
+            >Mushola<select name="prayer">
+              <option value="unknown">Belum dicek</option>
+              <option value="yes">Ada</option>
+              <option value="no">Tidak ada</option>
+              <option value="shared">Bersama</option>
+            </select></label
+          ><label
+            >Stabilitas<select name="stability">
+              <option value="unknown">Belum dicatat</option>
+              <option value="stable">Stabil</option>
+              <option value="moderate">Sedang</option>
+              <option value="unstable">Tidak stabil</option>
+            </select></label
+          ><label
+            >Kenyamanan<input
+              name="comfort"
+              type="number"
+              min="0"
+              max="5"
+              step="0.1"
+          /></label>
+        </div>
+        <section class="admin-speedtest" aria-labelledby="adminSpeedTestTitle">
+          <h3 id="adminSpeedTestTitle">Uji Wi-Fi di tempat ini</h3>
+          <p>
+            Uji hanya mengukur koneksi perangkat saat ini, bukan Wi-Fi kafe dari
+            jarak jauh.
+          </p>
+          <button
+            id="runSpeedTestButton"
+            class="secondary-action"
+            type="button"
+          >
+            Uji Wi-Fi & isi kecepatan
+          </button>
+          <p
+            id="adminSpeedTestStatus"
+            class="field-status"
+            role="status"
+            aria-live="polite"
+          ></p>
+          <p class="privacy-note">
+            Angka hanya masuk ke formulir sampai Anda menekan “Simpan
+            perubahan”.
+          </p>
+        </section>
+        <label
+          >Area merokok / suasana<input name="smoking" maxlength="160"
+        /></label>
+        <div class="map-tools">
+          <label
+            >Link Google Maps<input
+              name="mapUrl"
+              type="url"
+              maxlength="500"
+              placeholder="Tempel tautan Maps" /></label
+          ><button id="resolveMapButton" class="secondary-action" type="button">
+            Isi nama & area otomatis
+          </button>
+        </div>
+        <p
+          id="mapResolveStatus"
+          class="field-status"
+          role="status"
+          aria-live="polite"
+        >
+          Tempel tautan Maps atau tekan tombol untuk mengisi nama, area, dan
+          koordinat.
+        </p>
+        <div class="location-fields">
+          <label
+            >Latitude<input
+              name="latitude"
+              type="number"
+              min="-90"
+              max="90"
+              step="any"
+              inputmode="decimal" /></label
+          ><label
+            >Longitude<input
+              name="longitude"
+              type="number"
+              min="-180"
+              max="180"
+              step="any"
+              inputmode="decimal" /></label
+          ><button
+            id="useCurrentLocation"
+            class="secondary-action"
+            type="button"
+          >
+            Gunakan lokasi saat ini
+          </button>
+        </div>
+        <p class="location-note">
+          Gunakan hanya ketika Anda sedang berada di kafe. Browser akan meminta
+          izin lokasi.
+        </p>
+        <section class="photo-box">
+          <h3>Foto kafe</h3>
+          <label
+            >URL foto (opsional, HTTPS)<input
+              name="photoUrl"
+              type="url"
+              maxlength="2048"
+              placeholder="https://…" /></label
+          ><input
+            name="photoFile"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+          /><img id="photoPreview" alt="Pratinjau foto" hidden /><label
+            class="consent photo-remove"
+            ><input name="removePhoto" type="checkbox" /><span
+              >Hapus foto tersimpan</span
+            ></label
+          >
+          <p
+            id="photoStatus"
+            class="field-status"
+            role="status"
+            aria-live="polite"
+          ></p>
+        </section>
+        <div class="wifi-fields">
+          <label
+            >Nama Wi-Fi (SSID)<input
+              name="ssid"
+              maxlength="80"
+              autocomplete="off" /></label
+          ><label
+            >Password Wi-Fi<input
+              name="password"
+              maxlength="100"
+              autocomplete="new-password"
+            /><small
+              >Kosongkan untuk mempertahankan password lama.</small
+            ></label
+          >
+        </div>
+        <label class="consent"
+          ><input name="wifiConsent" type="checkbox" /><span
+            >Saya berwenang membagikan password Wi-Fi ini secara publik.</span
+          ></label
+        ><label class="consent"
+          ><input name="removePassword" type="checkbox" /><span
+            >Hapus password Wi-Fi yang tersimpan.</span
+          ></label
+        >
+        <p id="formError" class="form-error" role="alert"></p>
+        <button class="primary" type="submit">Simpan perubahan</button>
+      </form>
+    </dialog>
+    <dialog
+      id="confirmDialog"
+      class="confirm-dialog"
+      aria-labelledby="confirmTitle"
+    >
+      <form id="confirmForm">
+        <h2 id="confirmTitle">Konfirmasi penghapusan</h2>
+        <p id="confirmMessage"></p>
+        <div id="confirmNames" class="confirm-names" tabindex="0"></div>
+        <p class="irreversible">
+          Tindakan ini tidak dapat dibatalkan. Pastikan pilihan Anda benar.
+        </p>
+        <label
+          >Ketik <strong id="confirmPhraseLabel"></strong> untuk
+          melanjutkan<input
+            id="confirmPhrase"
+            autocomplete="off"
+            spellcheck="false"
+        /></label>
+        <div class="dialog-actions">
+          <button id="confirmCancel" type="button" class="secondary-action">
+            Batal</button
+          ><button
+            id="confirmSubmit"
+            type="submit"
+            class="danger-button"
+            disabled
+          >
+            Hapus sekarang
+          </button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>

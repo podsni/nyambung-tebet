@@ -7,8 +7,8 @@
     <title>Admin — Nyambung</title>
     <link rel="stylesheet" href="admin.css" />
     <script src="speedtest.js" defer></script>
-    <script src="admin.js?v=maps-ratings-1" defer></script>
-    <script src="admin-enhancements.js?v=maps-ratings-1" defer></script>
+    <script src="admin.js?v=backup-location-2" defer></script>
+    <script src="admin-enhancements.js?v=backup-location-2" defer></script>
   </head>
   <body>
     <header class="admin-header">
@@ -52,6 +52,21 @@
         <div id="adminStatus" class="status" role="status" aria-live="polite">
           Memuat data…
         </div>
+        <section class="backup-tools" aria-labelledby="backupTitle">
+          <div>
+            <h2 id="backupTitle">Cadangkan daftar kafe</h2>
+            <p>JSON dapat dipulihkan. CSV siap dibuka di spreadsheet.</p>
+          </div>
+          <div class="backup-actions">
+            <button id="exportJsonButton" class="secondary-action" type="button">Unduh backup JSON</button>
+            <button id="exportCsvButton" class="secondary-action" type="button">Ekspor CSV</button>
+            <label class="secondary-action backup-file-label" for="importBackupInput">Impor / pulihkan JSON
+              <input id="importBackupInput" type="file" accept="application/json,.json" />
+            </label>
+          </div>
+          <p class="backup-note">Backup tidak menyertakan SSID/password Wi-Fi atau rating pengguna. Pemulihan hanya menambah dan memperbarui data yang cocok; kafe lain tidak dihapus. Wi-Fi privat dan foto kafe yang sudah ada tetap dipertahankan; file foto tidak disalin ke backup.</p>
+          <p id="backupStatus" class="field-status" role="status" aria-live="polite"></p>
+        </section>
         <div class="list-toolbar">
           <label class="search-label"
             >Cari kafe<input
@@ -303,6 +318,18 @@
         >
         <p id="formError" class="form-error" role="alert"></p>
         <button class="primary" type="submit">Simpan perubahan</button>
+      </form>
+    </dialog>
+    <dialog id="backupDialog" class="confirm-dialog" aria-labelledby="backupReviewTitle">
+      <form id="backupForm">
+        <h2 id="backupReviewTitle">Tinjau pemulihan cadangan</h2>
+        <p id="backupReviewSummary"></p>
+        <div id="backupReviewList" class="confirm-names" tabindex="0"></div>
+        <p class="backup-review-note">Setelah Anda memilih Pulihkan, kafe yang cocok akan diperbarui dan yang baru akan ditambahkan. Data yang tidak ada di berkas tidak dihapus. SSID, password Wi-Fi, rating Nyambung, dan suara pengguna tidak diubah.</p>
+        <div class="dialog-actions">
+          <button id="backupCancel" type="button" class="secondary-action">Batal</button>
+          <button id="backupSubmit" type="submit" class="primary">Pulihkan gabungan</button>
+        </div>
       </form>
     </dialog>
     <dialog

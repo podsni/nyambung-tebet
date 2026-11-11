@@ -7,6 +7,7 @@
     filter: "",
     selected: new Set(),
     pendingUpload: null,
+    pendingBackupPlan: null,
     objectUrl: "",
   };
   const esc = (v) =>
@@ -47,6 +48,73 @@
     e.textContent = m;
     e.className = `status ${t}`;
   };
+  const normalizedText = (value) =>
+    String(value || "")
+      .normalize("NFKC")
+      .toLocaleLowerCase("id-ID")
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim();
+  function normalizedMapKey(value) {
+    try {
+      const url = new URL(String(value || ""));
+      if (!["http:", "https:"].includes(url.protocol)) return "";
+      url.hash = "";
+      ["g_st", "entry", "utm_source", "utm_medium"].forEach((key) =>
+        url.searchParams.delete(key),
+      );
+      return `${url.hostname.toLowerCase()}${url.pathname.replace(/\/+$/, "")}${url.search}`;
+    } catch {
+      return "";
+    }
+  }
+  function distanceKm(a, b) {
+    const latA = Number(a.latitude),
+      lonA = Number(a.longitude),
+      latB = Number(b.latitude),
+      lonB = Number(b.longitude);
+    if (![latA, lonA, latB, lonB].every(Number.isFinite)) return null;
+    const dLat = ((latB - latA) * Math.PI) / 180,
+      dLon = ((lonB - lonA) * Math.PI) / 180,
+      h =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos((latA * Math.PI) / 180) *
+          Math.cos((latB * Math.PI) / 180) *
+          Math.sin(dLon / 2) ** 2;
+    return 12742 * Math.asin(Math.min(1, Math.sqrt(h)));
+  }
+  function sameCafePlace(a, b) {
+    const nameA = normalizedText(a.name),
+      nameB = normalizedText(b.name),
+      areaA = normalizedText(a.area),
+      areaB = normalizedText(b.area);
+    if (nameA && nameA === nameB && areaA && areaA === areaB) return true;
+    const mapA = normalizedMapKey(a.mapUrl),
+      mapB = normalizedMapKey(b.mapUrl);
+    if (mapA && mapA === mapB) return true;
+    const distance = nameA && nameA === nameB ? distanceKm(a, b) : null;
+    return distance !== null && distance <= 0.2;
+  }
+  function findDuplicateCafe(cafe) {
+    return (
+      state.cafes.find((item) => String(item.id) === String(cafe.id)) ||
+      state.cafes.find((item) => sameCafePlace(cafe, item)) ||
+      null
+    );
+  }
+  function backupRecord(cafe) {
+    const record = { ...cafe };
+    [
+      "password",
+      "wifiPassword",
+      "ssid",
+      "wifiPublic",
+      "hasPassword",
+      "nyambungRating",
+      "nyambungRatingCount",
+      "updatedAt",
+    ].forEach((key) => delete record[key]);
+    return record;
+  }
   const toLocalDateTime = (value) => {
     if (!value) return "";
     const date = new Date(value);
@@ -102,6 +170,200 @@
       setStatus(e.message, "error");
     }
   }
+  function downloadFile(name, contents, type) {
+    const url = URL.createObjectURL(new Blob([contents], { type }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = name;
+    link.hidden = true;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function setBackupStatus(message, kind = "") {
+    const status = $("#backupStatus");
+    status.textContent = message;
+    status.className = `field-status ${kind}`;
+  }
+  function exportJsonBackup() {
+    const backup = {
+      format: "nyambung-cafe-backup",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      cafes: state.cafes.map(backupRecord),
+    };
+    const date = new Date().toISOString().slice(0, 10);
+    downloadFile(
+      `nyambung-backup-${date}.json`,
+      JSON.stringify(backup, null, 2),
+      "application/json",
+    );
+    setBackupStatus(
+      `Backup JSON ${state.cafes.length} kafe diunduh. Kredensial Wi-Fi dan rating pengguna tidak disertakan.`,
+      "success",
+    );
+  }
+  const csvFields = [
+    "id",
+    "name",
+    "area",
+    "googleRating",
+    "googleRatingCount",
+    "down",
+    "up",
+    "ping",
+    "jitter",
+    "hours",
+    "price",
+    "outlets",
+    "prayer",
+    "stability",
+    "comfort",
+    "smoking",
+    "latitude",
+    "longitude",
+    "mapUrl",
+    "photoUrl",
+    "provider",
+    "testedAt",
+  ];
+  function csvCell(value) {
+    let text = value == null ? "" : String(value);
+    if (typeof value === "string" && /^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  function exportCsv() {
+    const lines = [csvFields.map(csvCell).join(",")];
+    state.cafes.forEach((cafe) => {
+      const record = backupRecord(cafe);
+      lines.push(csvFields.map((field) => csvCell(record[field])).join(","));
+    });
+    const date = new Date().toISOString().slice(0, 10);
+    downloadFile(
+      `nyambung-daftar-kafe-${date}.csv`,
+      `\uFEFF${lines.join("\r\n")}`,
+      "text/csv;charset=utf-8",
+    );
+    setBackupStatus(
+      `CSV ${state.cafes.length} kafe diunduh tanpa SSID/password Wi-Fi.`,
+      "success",
+    );
+  }
+  function buildRestorePlan(cafes) {
+    const usedTargets = new Set();
+    return cafes.map((cafe) => {
+      const target =
+        state.cafes.find((item) => String(item.id) === String(cafe.id)) ||
+        state.cafes.find((item) => sameCafePlace(cafe, item)) ||
+        null;
+      if (target && usedTargets.has(String(target.id)))
+        throw new Error(
+          `Beberapa kafe di backup cocok ke data yang sama (${target.name}). Tidak ada perubahan yang dilakukan.`,
+        );
+      if (target) usedTargets.add(String(target.id));
+      return { cafe, target };
+    });
+  }
+  function showBackupReview(cafes) {
+    const plan = buildRestorePlan(cafes),
+      updates = plan.filter((item) => item.target).length,
+      additions = plan.length - updates;
+    state.pendingBackupPlan = plan;
+    $("#backupReviewSummary").textContent =
+      `${plan.length} kafe ditinjau: ${updates} akan diperbarui, ${additions} akan ditambahkan. Daftar live saat ini berisi ${state.cafes.length} kafe.`;
+    $("#backupReviewList").innerHTML = plan
+      .map(
+        ({ cafe, target }) =>
+          `<div><strong>${esc(cafe.name)}</strong> <span>${esc(cafe.area)} · ${target ? `perbarui data cocok: ${esc(target.name)}` : "kafe baru"}</span></div>`,
+      )
+      .join("");
+    $("#backupSubmit").disabled = false;
+    $("#backupSubmit").textContent = "Pulihkan gabungan";
+    $("#backupDialog").showModal();
+  }
+  $("#exportJsonButton").addEventListener("click", exportJsonBackup);
+  $("#exportCsvButton").addEventListener("click", exportCsv);
+  $("#importBackupInput").addEventListener("change", async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      if (file.size > 1000000)
+        throw new Error("Ukuran backup maksimal 1 MB.");
+      const backup = JSON.parse(await file.text());
+      if (
+        backup?.format !== "nyambung-cafe-backup" ||
+        backup?.version !== 1 ||
+        !Array.isArray(backup.cafes) ||
+        !backup.cafes.length ||
+        backup.cafes.length > 500
+      )
+        throw new Error("Pilih backup JSON Nyambung versi 1 yang berisi 1–500 kafe.");
+      const ids = new Set();
+      for (const cafe of backup.cafes) {
+        if (
+          !cafe ||
+          typeof cafe !== "object" ||
+          typeof cafe.id !== "string" ||
+          !cafe.id ||
+          typeof cafe.name !== "string" ||
+          !cafe.name.trim() ||
+          typeof cafe.area !== "string" ||
+          !cafe.area.trim() ||
+          ["password", "wifiPassword", "ssid", "wifiPublic", "hasPassword"].some((key) =>
+            Object.prototype.hasOwnProperty.call(cafe, key),
+          )
+        )
+          throw new Error("Ada data tidak lengkap atau kolom Wi-Fi privat di dalam backup.");
+        if (ids.has(cafe.id))
+          throw new Error("Backup memiliki ID kafe yang berulang.");
+        ids.add(cafe.id);
+      }
+      setBackupStatus("Berkas terbaca. Periksa daftar perubahan sebelum memulihkan.");
+      showBackupReview(backup.cafes);
+    } catch (error) {
+      state.pendingBackupPlan = null;
+      setBackupStatus(error.message || "Backup tidak dapat dibaca.", "error");
+    } finally {
+      event.target.value = "";
+    }
+  });
+  $("#backupCancel").addEventListener("click", () => {
+    state.pendingBackupPlan = null;
+    $("#backupDialog").close();
+  });
+  $("#backupForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!state.pendingBackupPlan?.length) return;
+    const button = $("#backupSubmit"),
+      plan = state.pendingBackupPlan;
+    button.disabled = true;
+    button.textContent = "Memulihkan…";
+    try {
+      const result = await mutation("/api/admin/cafes/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          format: "nyambung-cafe-backup",
+          version: 1,
+          expectedCount: state.cafes.length,
+          expectedTargets: plan.map(({ target }) =>
+            target ? { id: String(target.id), updatedAt: String(target.updatedAt || "") } : null,
+          ),
+          cafes: plan.map(({ cafe }) => cafe),
+        }),
+      });
+      state.pendingBackupPlan = null;
+      $("#backupDialog").close();
+      await loadCafes();
+      setBackupStatus(result.message || "Pemulihan selesai.", "success");
+    } catch (error) {
+      setBackupStatus(error.message || "Pemulihan gagal; data tidak diubah.", "error");
+      button.disabled = false;
+    } finally {
+      button.textContent = "Pulihkan gabungan";
+    }
+  });
   function revokePreview() {
     if (state.objectUrl) {
       URL.revokeObjectURL(state.objectUrl);
@@ -479,6 +741,13 @@
   window.__NyambungAdmin = {
     setPendingUpload(file) {
       state.pendingUpload = file;
+    },
+    findDuplicate: findDuplicateCafe,
+    openCafe(id) {
+      const cafe = state.cafes.find((item) => String(item.id) === String(id));
+      if (!cafe) return false;
+      showForm(cafe);
+      return true;
     },
   };
   boot();

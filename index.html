@@ -6,12 +6,12 @@
     <meta name="theme-color" content="#f7f8f5" />
     <meta
       name="description"
-      content="Direktori kafe nyaman untuk kerja di Tebet."
+      content="Direktori kafe nyaman untuk kerja. Lokasi perangkat dapat dipakai untuk mencari tempat terdekat."
     />
-    <title>Nyambung — Direktori kafe Tebet</title>
-    <link rel="stylesheet" href="styles.css?v=location-responsive-1" />
+    <title>Nyambung — Direktori kafe</title>
+    <link rel="stylesheet" href="styles.css?v=location-aware-2" />
     <script src="speedtest.js" defer></script>
-    <script src="app.js?v=location-responsive-1" defer></script>
+    <script src="app.js?v=location-aware-2" defer></script>
     <script src="public-speedtest.js" defer></script>
   </head>
   <body>
@@ -21,12 +21,12 @@
           ><span class="brand-mark">↯</span
           ><span>nyambung<span class="brand-dot">.</span></span></a
         >
-        <span class="header-location">Tebet, Jakarta</span>
+        <span class="header-location" aria-live="polite">Tebet, Jakarta · perkiraan</span>
       </div>
     </header>
     <main class="container">
       <section class="intro" aria-labelledby="page-title">
-        <p class="eyebrow">DIREKTORI KERJA DI TEBET</p>
+            <p class="eyebrow">DIREKTORI KAFE</p>
         <h1 id="page-title">
           Cari tempat yang<br /><em>nyambung</em> untuk fokus.
         </h1>
@@ -134,7 +134,7 @@
                 <option value="rating">Rating Nyambung</option>
                 <option value="google-rating">Rating Google Maps</option>
                 <option value="name">Nama A–Z</option>
-                <option value="nearest" selected>Terdekat dari Tebet (perkiraan)</option>
+                <option id="nearestSortOption" value="nearest" selected>Terdekat dari Tebet (perkiraan)</option>
               </select></label
             ><button id="locationButton" class="location-button" type="button" aria-describedby="locationStatus">
               Gunakan lokasi saya</button
@@ -162,7 +162,10 @@
           class="location-status"
           role="status"
           aria-live="polite"
-        >Jarak diperkirakan dari pusat Tebet, Jakarta. Gunakan lokasi saya untuk jarak yang lebih akurat.</p>
+        >Tebet, Jakarta adalah titik perkiraan sementara. Izinkan lokasi untuk menampilkan area perangkat dan mencari kafe terdekat.</p>
+        <p class="location-privacy">
+          Nama area memakai OpenStreetMap dengan koordinat yang dibulatkan sekitar 100 m. Titik GPS presisi hanya dikirim ke Google Maps jika kamu membuka petunjuk arah.
+        </p>
         <div
           class="filters"
           id="filterRow"

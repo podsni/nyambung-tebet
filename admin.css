@@ -175,6 +175,48 @@ select:focus {
   background: #fff0ed;
   color: var(--red);
 }
+.backup-tools {
+  margin: 0 0 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #fff;
+}
+.backup-tools h2 {
+  margin: 0 0 3px;
+  font-size: 13px;
+}
+.backup-tools > div:first-child p,
+.backup-note,
+.backup-review-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 10px 0 6px;
+}
+.backup-file-label {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+}
+.backup-file-label input {
+  display: none;
+}
+.backup-note {
+  line-height: 1.5;
+}
+.backup-tools .field-status {
+  margin: 6px 0 0;
+}
+.backup-review-note {
+  margin: 10px 0 14px !important;
+  line-height: 1.5;
+}
 .list-toolbar {
   display: flex;
   align-items: end;
@@ -493,6 +535,13 @@ select:focus {
   .list-toolbar {
     align-items: stretch;
     flex-direction: column;
+  }
+  .backup-actions > * {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+  .backup-file-label {
+    width: 100%;
   }
   .search-label {
     width: 100%;

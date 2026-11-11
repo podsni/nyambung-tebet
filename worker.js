@@ -157,6 +157,13 @@ function sameOriginMutation(request) {
   );
 }
 
+function sameOriginLocationLookup(request) {
+  return Boolean(
+    request.headers.get("Origin") === new URL(request.url).origin &&
+      request.headers.get("X-Nyambung-Location") === "1",
+  );
+}
+
 function sameOriginRatingMutation(request) {
   return Boolean(
     request.headers.get("Origin") === new URL(request.url).origin &&
@@ -330,6 +337,7 @@ function adminCafe(row) {
     wifiPublic: Boolean(row.wifi_public),
     mapUrl: row.map_url || "",
     photoKey: row.photo_key || "",
+    updatedAt: row.updated_at || "",
   };
 }
 
@@ -958,6 +966,270 @@ async function bulkDeleteCafes(request, env) {
   });
 }
 
+function normalizedPlaceText(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .toLocaleLowerCase("id-ID")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+function normalizedMapKey(value) {
+  try {
+    const url = new URL(String(value || ""));
+    if (!(["https:", "http:"].includes(url.protocol))) return "";
+    url.hash = "";
+    ["g_st", "entry", "utm_source", "utm_medium"].forEach((key) =>
+      url.searchParams.delete(key),
+    );
+    return `${url.hostname.toLowerCase()}${url.pathname.replace(/\/+$/, "")}${url.search}`;
+  } catch {
+    return "";
+  }
+}
+
+function cafePlaceDistanceKm(a, b) {
+  const latA = Number(a.latitude ?? a.latitude),
+    lonA = Number(a.longitude ?? a.longitude),
+    latB = Number(b.latitude ?? b.latitude),
+    lonB = Number(b.longitude ?? b.longitude);
+  if (![latA, lonA, latB, lonB].every(Number.isFinite)) return null;
+  const dLat = ((latB - latA) * Math.PI) / 180,
+    dLon = ((lonB - lonA) * Math.PI) / 180,
+    h =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos((latA * Math.PI) / 180) *
+        Math.cos((latB * Math.PI) / 180) *
+        Math.sin(dLon / 2) ** 2;
+  return 12742 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+function sameCafePlace(a, b) {
+  const nameA = normalizedPlaceText(a.name),
+    nameB = normalizedPlaceText(b.name),
+    areaA = normalizedPlaceText(a.area),
+    areaB = normalizedPlaceText(b.area);
+  if (nameA && nameA === nameB && areaA && areaA === areaB) return true;
+  const mapA = normalizedMapKey(a.mapUrl ?? a.map_url),
+    mapB = normalizedMapKey(b.mapUrl ?? b.map_url);
+  if (mapA && mapA === mapB) return true;
+  const distance = nameA && nameA === nameB ? cafePlaceDistanceKm(a, b) : null;
+  return distance !== null && distance <= 0.2;
+}
+
+async function importCafeBackup(request, env) {
+  let body;
+  try {
+    body = await readJson(request, 1000000);
+  } catch (error) {
+    return json({ error: error.message || "Berkas cadangan tidak valid." }, 400);
+  }
+  if (
+    body.format !== "nyambung-cafe-backup" ||
+    body.version !== 1 ||
+    !Array.isArray(body.cafes) ||
+    !body.cafes.length ||
+    body.cafes.length > 500 ||
+    !Array.isArray(body.expectedTargets) ||
+    body.expectedTargets.length !== body.cafes.length ||
+    !Number.isInteger(body.expectedCount) ||
+    body.expectedCount < 0
+  )
+    return json({ error: "Format cadangan tidak valid atau melebihi 500 kafe." }, 400);
+
+  const seenIds = new Set(),
+    seenPlaces = [],
+    incoming = [];
+  try {
+    for (const item of body.cafes) {
+      if (!item || typeof item !== "object" || Array.isArray(item))
+        throw new Error("Ada data kafe yang formatnya tidak valid.");
+      if (["password", "wifiPassword", "ssid", "wifiPublic", "hasPassword"].some((key) =>
+        Object.prototype.hasOwnProperty.call(item, key),
+      ))
+        throw new Error("Berkas cadangan tidak boleh memuat kredensial Wi-Fi.");
+      if (
+        typeof item.id !== "string" ||
+        !/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(item.id) ||
+        seenIds.has(item.id)
+      )
+        throw new Error("ID kafe kosong, tidak valid, atau duplikat di berkas.");
+      seenIds.add(item.id);
+      const cafe = normalizeCafe(item);
+      if (seenPlaces.some((previous) => sameCafePlace(cafe, previous)))
+        throw new Error("Berkas berisi kafe yang terduplikasi.");
+      seenPlaces.push(cafe);
+      incoming.push({ sourceId: item.id, cafe });
+    }
+  } catch (error) {
+    return json({ error: error.message || "Data cadangan tidak valid." }, 400);
+  }
+
+  const { results: rows } = await env.DB.prepare(
+    "SELECT id,name,area,map_url,latitude,longitude,photo_key,updated_at FROM cafes",
+  ).all();
+  if (rows.length !== body.expectedCount)
+    return json(
+      { error: "Daftar berubah sejak ditinjau. Muat ulang dan tinjau cadangan lagi." },
+      409,
+    );
+
+  const usedTargets = new Set(),
+    newPhotoKeys = new Set(),
+    plan = [];
+  for (let index = 0; index < incoming.length; index++) {
+    const { sourceId, cafe } = incoming[index];
+    const target =
+      rows.find((row) => row.id === sourceId) ||
+      rows.find((row) => sameCafePlace(cafe, row)) ||
+      null;
+    const expected = body.expectedTargets[index];
+    if (expected === null) {
+      if (target)
+        return json(
+          { error: "Daftar berubah sejak ditinjau. Muat ulang dan tinjau cadangan lagi." },
+          409,
+        );
+    } else if (
+      !expected ||
+      typeof expected.id !== "string" ||
+      typeof expected.updatedAt !== "string" ||
+      !target ||
+      target.id !== expected.id ||
+      target.updated_at !== expected.updatedAt
+    ) {
+      return json(
+        { error: "Data kafe berubah sejak ditinjau. Muat ulang dan tinjau cadangan lagi." },
+        409,
+      );
+    }
+    if (target && usedTargets.has(target.id))
+      return json({ error: "Beberapa baris cadangan menunjuk kafe yang sama." }, 400);
+    if (target) usedTargets.add(target.id);
+    if (!target && cafe.photoKey) {
+      if (newPhotoKeys.has(cafe.photoKey))
+        return json({ error: "Berkas menghubungkan satu foto ke beberapa kafe." }, 400);
+      newPhotoKeys.add(cafe.photoKey);
+    }
+    if (!target) {
+      try {
+        await validateCafePhoto(cafe, env);
+      } catch (error) {
+        return json({ error: error.message || "Referensi foto cadangan tidak valid." }, 400);
+      }
+    }
+    plan.push({ sourceId, cafe, target });
+  }
+
+  const preservedColumns = new Set([
+      "ssid",
+      "wifi_password",
+      "wifi_public",
+      "photo_url",
+      "photo_key",
+    ]),
+    updateColumns = CAFE_SAVE_COLUMNS.filter((column) => !preservedColumns.has(column)),
+    updateIndexes = CAFE_SAVE_COLUMNS.map((column, index) =>
+      preservedColumns.has(column) ? -1 : index,
+    ).filter((index) => index >= 0),
+    now = new Date().toISOString(),
+    statements = [];
+  let updated = 0,
+    added = 0;
+  for (const item of plan) {
+    const values = cafeDbValues(item.cafe);
+    if (item.target) {
+      statements.push(
+        env.DB.prepare(
+          `UPDATE cafes SET ${updateColumns.map((column) => `${column}=?`).join(",")},updated_at=? WHERE id=?`,
+        ).bind(...updateIndexes.map((index) => values[index]), now, item.target.id),
+      );
+      updated++;
+    } else {
+      const columns = ["id", ...CAFE_SAVE_COLUMNS, "created_at", "updated_at"];
+      statements.push(
+        env.DB.prepare(
+          `INSERT INTO cafes (${columns.join(",")}) VALUES (${columns.map(() => "?").join(",")})`,
+        ).bind(item.sourceId, ...values, now, now),
+      );
+      added++;
+    }
+  }
+  try {
+    await env.DB.batch(statements);
+  } catch {
+    return json({ error: "Pemulihan gagal; database tidak berubah. Periksa data dan coba lagi." }, 400);
+  }
+  return json({ updated, added, message: `${updated} kafe diperbarui dan ${added} kafe ditambahkan.` });
+}
+
+async function lookupLocationArea(request) {
+  if (!sameOriginLocationLookup(request))
+    return json({ error: "Permintaan lokasi tidak valid." }, 403);
+  let body;
+  try {
+    body = await readJson(request, 4096);
+  } catch (error) {
+    return json({ error: error.message || "Koordinat tidak valid." }, 400);
+  }
+  const lat = Number(body.latitude),
+    lon = Number(body.longitude),
+    roundedLat = Math.round(lat * 1000) / 1000,
+    roundedLon = Math.round(lon * 1000) / 1000;
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lon) ||
+    Math.abs(lat) > 90 ||
+    Math.abs(lon) > 180 ||
+    Math.abs(lat - roundedLat) > 0.000001 ||
+    Math.abs(lon - roundedLon) > 0.000001
+  )
+    return json({ error: "Koordinat harus valid dan dibulatkan sekitar 100 m." }, 400);
+
+  const upstreamUrl = new URL("https://photon.komoot.io/reverse");
+  upstreamUrl.searchParams.set("lat", roundedLat.toFixed(3));
+  upstreamUrl.searchParams.set("lon", roundedLon.toFixed(3));
+  upstreamUrl.searchParams.set("limit", "1");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4500);
+  try {
+    const response = await fetch(upstreamUrl.href, {
+      headers: {
+        Accept: "application/json",
+        "Accept-Language": "id,en",
+        "User-Agent": "Nyambung Cafe Directory (https://nyambung-tebet.podsni0.workers.dev)",
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok)
+      return json({ error: "Layanan nama area belum tersedia." }, 502);
+    const result = await response.json();
+    const properties = result?.features?.[0]?.properties || {};
+    const local =
+      properties.neighbourhood ||
+      properties.suburb ||
+      properties.locality ||
+      properties.city_district ||
+      properties.district ||
+      properties.borough ||
+      properties.town ||
+      properties.village;
+    const regional =
+      properties.city || properties.county || properties.state || "";
+    const label = [...new Set([local, regional].filter(Boolean).map((part) => String(part).trim()))]
+      .filter(Boolean)
+      .slice(0, 2)
+      .join(", ")
+      .slice(0, 100);
+    if (!label) return json({ error: "Nama area belum tersedia." }, 404);
+    return json({ label, source: "OpenStreetMap" });
+  } catch {
+    return json({ error: "Layanan nama area belum dapat dijangkau." }, 502);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function handleApi(request, env) {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, "") || "/";
@@ -975,6 +1247,9 @@ async function handleApi(request, env) {
       source: "cloudflare-request-metadata",
     });
   }
+
+  if (path === "/api/location/label" && method === "POST")
+    return lookupLocationArea(request);
 
   if (path === "/api/maps/resolve" && method === "GET") {
     try {
@@ -1122,6 +1397,8 @@ async function handleApi(request, env) {
     }
     if (!sameOriginMutation(request))
       return json({ error: "Permintaan tidak valid." }, 403);
+    if (path === "/api/admin/cafes/import" && method === "POST")
+      return importCafeBackup(request, env);
     if (path === "/api/admin/photos" && method === "POST") {
       if (!env.CAFE_PHOTOS)
         return json(

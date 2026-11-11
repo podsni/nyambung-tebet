@@ -31,7 +31,17 @@
       const data = await r.json().catch(() => ({}));
       if (!r.ok)
         throw new Error(data.error || "Tautan Maps tidak dapat dibaca.");
-      const f = $("#cafeForm");
+      let f = $("#cafeForm");
+      const existing = window.__NyambungAdmin?.findDuplicate?.(data);
+      if (existing && f.elements.id.value && f.elements.id.value !== existing.id)
+        throw new Error(
+          `${data.name || "Kafe ini"} sudah ada sebagai ${existing.name} · ${existing.area}. Tutup formulir ini lalu edit data yang sudah ada agar tidak tertimpa.`,
+        );
+      if (existing && !f.elements.id.value) {
+        window.__NyambungAdmin?.openCafe?.(existing.id);
+        f = $("#cafeForm");
+      }
+      f.elements.mapUrl.value = data.mapUrl || url;
       if (data.name) f.elements.name.value = data.name;
       if (data.area) f.elements.area.value = data.area;
       if (data.latitude !== null && data.latitude !== undefined)
@@ -50,8 +60,10 @@
         data.googleRating == null
           ? "rating Google belum terbaca"
           : `Google Maps ★ ${Number(data.googleRating).toFixed(1)}${data.googleRatingCount == null ? "" : ` · ${data.googleRatingCount} ulasan`}`;
-      mapStatus.textContent = `Terisi: ${data.name || "nama tempat"} · ${data.area || "area belum terbaca"}${data.latitude != null ? " · koordinat tersedia" : ""} · ${googleRating}. Semua isian dapat diedit; periksa sebelum menyimpan.`;
-      mapStatus.className = "field-status success";
+      mapStatus.textContent = existing
+        ? `Data ${existing.name} sudah terdaftar. Formulir edit dibuka dan diisi dari Maps; data lain tetap dipertahankan. ${googleRating}. Periksa lalu simpan.`
+        : `Terisi: ${data.name || "nama tempat"} · ${data.area || "area belum terbaca"}${data.latitude != null ? " · koordinat tersedia" : ""} · ${googleRating}. Semua isian dapat diedit; periksa sebelum menyimpan.`;
+      mapStatus.className = existing ? "field-status" : "field-status success";
     } catch (e) {
       mapStatus.textContent = e.message || "Tautan Maps tidak dapat dibaca.";
       mapStatus.className = "field-status error";

@@ -189,6 +189,40 @@ try {
   );
   const network = (await api("/api/network")).data;
   assert.ok("provider" in network && "asn" in network && !("ip" in network));
+  assert.equal(
+    (
+      await api("/api/location/label", {
+        method: "POST",
+        body: { latitude: 91, longitude: 0 },
+        headers: { "X-Nyambung-Location": "1" },
+        authenticated: false,
+      })
+    ).response.status,
+    400,
+  );
+  assert.equal(
+    (
+      await api("/api/location/label", {
+        method: "POST",
+        body: { latitude: -6.2265, longitude: 106.8515 },
+        headers: { "X-Nyambung-Location": "1" },
+        authenticated: false,
+      })
+    ).response.status,
+    400,
+  );
+  assert.equal(
+    (
+      await api("/api/location/label", {
+        method: "POST",
+        body: { latitude: -6.226, longitude: 106.852 },
+        origin: false,
+        authenticated: false,
+      })
+    ).response.status,
+    403,
+  );
+  console.log("PASS: area lookup enforces same-origin and coarse-only coordinates.");
   assert.equal((await api("/api/admin/cafes")).response.status, 401);
   assert.equal(
     (
@@ -398,6 +432,97 @@ try {
   assert.equal(afterAdminEdit.googleRating, 4.8);
   assert.equal(afterAdminEdit.nyambungRating, 4);
   assert.equal(afterAdminEdit.nyambungRatingCount, 2);
+  const adminAfterEdit = (await api("/api/admin/cafes")).data.find(
+    (cafe) => cafe.id === a.data.id,
+  );
+  const backupExisting = { ...adminAfterEdit, googleRating: 4.9 };
+  [
+    "password",
+    "wifiPassword",
+    "ssid",
+    "wifiPublic",
+    "hasPassword",
+    "nyambungRating",
+    "nyambungRatingCount",
+    "updatedAt",
+  ].forEach((key) => delete backupExisting[key]);
+  const backupNew = {
+    ...cafeInput("Uji impor cadangan baru"),
+    id: "backup-restore-local-test",
+    latitude: -7.9,
+    longitude: 112.7,
+    googleRating: 4.6,
+  };
+  ["password", "wifiPublic"].forEach((key) => delete backupNew[key]);
+  const beforeImportCount = (await list()).length;
+  const importBody = {
+    format: "nyambung-cafe-backup",
+    version: 1,
+    expectedCount: beforeImportCount,
+    expectedTargets: [
+      { id: adminAfterEdit.id, updatedAt: adminAfterEdit.updatedAt },
+      null,
+    ],
+    cafes: [backupExisting, backupNew],
+  };
+  const restored = await api("/api/admin/cafes/import", {
+    method: "POST",
+    body: importBody,
+  });
+  assert.equal(restored.response.status, 200);
+  assert.equal(restored.data.updated, 1);
+  assert.equal(restored.data.added, 1);
+  assert.equal((await list()).length, beforeImportCount + 1);
+  const afterRestore = (await api(`/api/cafes/${a.data.id}`)).data;
+  assert.equal(afterRestore.googleRating, 4.9);
+  assert.equal(afterRestore.photoUrl, uploaded.data.photoUrl);
+  assert.equal(afterRestore.nyambungRating, 4);
+  assert.equal(afterRestore.nyambungRatingCount, 2);
+  const adminAfterRestore = (await api("/api/admin/cafes")).data.find(
+    (cafe) => cafe.id === a.data.id,
+  );
+  assert.ok(adminAfterRestore.password === adminAfterEdit.password);
+  assert.equal(adminAfterRestore.wifiPublic, adminAfterEdit.wifiPublic);
+  const afterNewRestore = (await api("/api/cafes")).data.find(
+    (cafe) => cafe.id === "backup-restore-local-test",
+  );
+  assert.equal(afterNewRestore.latitude, -7.9);
+  assert.equal(afterNewRestore.longitude, 112.7);
+  const replayAdmin = (await api("/api/admin/cafes")).data;
+  const replayBody = {
+    ...importBody,
+    expectedCount: replayAdmin.length,
+    expectedTargets: [
+      {
+        id: a.data.id,
+        updatedAt: replayAdmin.find((cafe) => cafe.id === a.data.id).updatedAt,
+      },
+      {
+        id: "backup-restore-local-test",
+        updatedAt: replayAdmin.find((cafe) => cafe.id === "backup-restore-local-test")
+          .updatedAt,
+      },
+    ],
+  };
+  const replayed = await api("/api/admin/cafes/import", {
+    method: "POST",
+    body: replayBody,
+  });
+  assert.equal(replayed.data.updated, 2);
+  assert.equal(replayed.data.added, 0);
+  assert.equal((await list()).length, beforeImportCount + 1);
+  assert.equal(
+    (
+      await api("/api/admin/cafes/import", {
+        method: "POST",
+        body: { ...replayBody, expectedCount: -1 },
+      })
+    ).response.status,
+    400,
+  );
+  console.log(
+    "PASS: backup merge is repeatable, adds without deleting, and preserves private Wi-Fi and community ratings.",
+  );
   assert.equal(
     (
       await api("/api/admin/photos", {
@@ -449,8 +574,8 @@ try {
   assert.equal(b.response.status, 201);
   assert.equal(c.response.status, 201);
   let snapshot = await list();
-  assert.equal(snapshot.length, 30);
-  const targetIds = [a.data.id, b.data.id];
+  assert.equal(snapshot.length, 31);
+  const targetIds = [a.data.id, b.data.id, "backup-restore-local-test"];
   assert.equal(
     (
       await api("/api/admin/cafes/bulk-delete", {
@@ -458,7 +583,7 @@ try {
         body: {
           ids: targetIds,
           all: false,
-          expectedCount: 30,
+          expectedCount: 31,
           confirmation: "",
         },
       })
@@ -472,7 +597,7 @@ try {
         body: {
           ids: [...targetIds, "missing-id"],
           all: false,
-          expectedCount: 30,
+          expectedCount: 31,
           confirmation: "HAPUS PILIHAN",
         },
       })
@@ -486,24 +611,24 @@ try {
         body: {
           ids: snapshot.map((cafe) => cafe.id),
           all: true,
-          expectedCount: 29,
+          expectedCount: 30,
           confirmation: "HAPUS SEMUA DATA",
         },
       })
     ).response.status,
     409,
   );
-  assert.equal((await list()).length, 30);
+  assert.equal((await list()).length, 31);
   const selectedDeletion = await api("/api/admin/cafes/bulk-delete", {
     method: "POST",
     body: {
       ids: targetIds,
       all: false,
-      expectedCount: 30,
+      expectedCount: 31,
       confirmation: "HAPUS PILIHAN",
     },
   });
-  assert.equal(selectedDeletion.data.deleted, 2);
+  assert.equal(selectedDeletion.data.deleted, 3);
   assert.equal((await list()).length, 28);
   assert.equal((await fetch(`${base}${uploaded.data.photoUrl}`)).status, 404);
   assert.equal(

@@ -6,10 +6,11 @@ Direktori kafe yang nyaman untuk kerja, dibuat untuk layar ponsel. Situs live: *
 
 - Pencarian, filter fasilitas, pengurutan Wi-Fi, rating Nyambung atau Google Maps, detail tempat, dan tautan Maps.
 - Foto pada kartu dan detail. Admin dapat menempel URL HTTPS langsung atau mengunggah JPEG/PNG/WebP; foto dioptimalkan di browser dan disimpan di R2. Tempat tanpa foto menampilkan placeholder yang jujur.
-- Lokasi perangkat hanya diminta setelah tombol ditekan. Jika izin ditolak atau GPS tidak merespons, jarak dan urutan terdekat memakai titik perkiraan pusat Tebet, Jakarta; kartu menandai jarak tersebut sebagai perkiraan. Koordinat perangkat hanya disimpan di memori tab, tidak dikirim ke server, dan tombol hapus mengembalikan tampilan ke titik Tebet. Jarak adalah garis lurus, bukan jarak rute; urutan terdekat memerlukan koordinat kafe yang sudah dilengkapi admin.
+- Jika izin lokasi browser sudah pernah diberikan, lokasi perangkat dicari otomatis setelah daftar kafe dimuat; jika browser perlu meminta izin, permintaan baru dimulai setelah tombol ditekan. Header menampilkan area yang terdeteksi secara perkiraan, termasuk saat berada di luar Tebet. Bila GPS tidak tersedia, Tebet, Jakarta ditandai jelas sebagai fallback. Koordinat presisi tetap di memori tab; untuk nama area, hanya koordinat yang dibulatkan sekitar 100 m yang diteruskan melalui Worker ke Photon/OpenStreetMap. Nyambung tidak menyimpan titik GPS ke D1. Saat pengguna sendiri membuka petunjuk arah, titik asal diteruskan ke Google Maps. Jarak tetap garis lurus, bukan jarak rute, dan pengurutan terdekat memerlukan koordinat kafe.
 - Speedtest HTTP Cloudflare dengan warm-up, beberapa sampel, progres, pembatalan, dan dua mode pemakaian data. Angka mengukur koneksi perangkat saat tes, bukan menguji Wi-Fi kafe dari jauh.
 - ISP/provider otomatis dari metadata jaringan publik/ASN bila tersedia. VPN/proxy dapat mengubah provider yang terlihat. Browser tidak dapat membaca nama Wi-Fi/SSID secara otomatis.
-- Admin dengan sesi HttpOnly, rate limit login, validasi origin, CRUD, dan impor dari tautan Google Maps. Nama, area, koordinat, rating Google, serta jumlah ulasan diisi bila terbaca, lalu tetap dapat ditinjau dan diedit sebelum disimpan.
+- Admin dengan sesi HttpOnly, rate limit login, validasi origin, CRUD, dan impor dari tautan Google Maps. Nama, area, koordinat, rating Google, serta jumlah ulasan diisi bila terbaca, lalu tetap dapat ditinjau dan diedit sebelum disimpan. Jika tempat yang sama sudah terdaftar, data lama dibuka untuk diperbarui alih-alih membuat duplikat.
+- Daftar kafe dapat diekspor sebagai CSV atau backup JSON versi 1. Pemulihan menampilkan tinjauan jumlah kafe yang akan diperbarui/ditambah, lalu menggabungkan data tanpa menghapus kafe yang tidak ada di backup. SSID, password Wi-Fi, dan rating pengguna tidak disertakan; kolom Wi-Fi privat dan foto kafe yang ada tetap dipertahankan saat update. Backup tidak menyalin berkas foto.
 - Rating Google Maps ditampilkan terpisah dari rating pengguna Nyambung. Pengguna dapat memberi satu rating per browser dan memperbaruinya dari browser yang sama; backend hanya menyimpan identitas browser dalam bentuk hash.
 - Tes Wi-Fi mengisi formulir sebelum disimpan; semua hasil ukur tetap bisa diperiksa dan diedit admin.
 - Hapus satu, beberapa pilihan, atau seluruh **data kafe**. Penghapusan massal memerlukan dialog, daftar target, frasa konfirmasi persis, dan pemeriksaan ulang jumlah/ID di server. Backend tidak memakai `DELETE FROM cafes` tanpa kondisi ID.
@@ -65,7 +66,7 @@ npm run test:syntax
 npm test
 ```
 
-`npm test` membuat konfigurasi, credential acak, D1, dan R2 **lokal sementara**, menjalankan CRUD, validasi, impor foto, pemisahan dan pembaruan rating, serta skenario penghapusan, lalu membersihkan semuanya. Pengujian memiliki guard localhost dan tidak memakai konfigurasi maupun database produksi. Pengujian hapus semua hanya dijalankan pada salinan lokal yang dibuat khusus untuk tes.
+`npm test` membuat konfigurasi, credential acak, D1, dan R2 **lokal sementara**, menjalankan CRUD, validasi, pemeriksaan pembulatan lokasi, impor foto, backup-restore berulang dan pelestarian rating/Wi-Fi privat, serta skenario penghapusan, lalu membersihkan semuanya. Pengujian memiliki guard localhost dan tidak memakai konfigurasi maupun database produksi. Pengujian hapus semua hanya dijalankan pada salinan lokal yang dibuat khusus untuk tes.
 
 ## Keamanan dan data
 

@@ -7,6 +7,7 @@
     filter: "all",
     location: { ...TEBET_FALLBACK },
     locationSource: "tebet",
+    locationLabelRequest: 0,
     detailRequest: 0,
     ratingDeviceId: "",
     userRatings: loadUserRatings(),
@@ -344,12 +345,36 @@
       );
     render();
   }
-  function locate() {
+  function setHeaderLocation(label) {
+    $(".header-location").textContent = label;
+  }
+  async function resolveLocationArea(lat, lon) {
+    const rounded = (value) => Math.round(value * 1000) / 1000;
+    const response = await fetch("/api/location/label", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-Nyambung-Location": "1",
+      },
+      body: JSON.stringify({ latitude: rounded(lat), longitude: rounded(lon) }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.label)
+      throw new Error(data.error || "Nama area belum tersedia.");
+    return data.label;
+  }
+  function locate(options = {}) {
+    const automatic = Boolean(options?.automatic);
     const status = $("#locationStatus"),
       button = $("#locationButton");
     const useTebetFallback = (message) => {
       state.location = { ...TEBET_FALLBACK };
       state.locationSource = "tebet";
+      state.locationLabelRequest += 1;
+      setHeaderLocation("Tebet, Jakarta · perkiraan");
+      $("#nearestSortOption").textContent = "Terdekat dari Tebet (perkiraan)";
       $("#clearLocation").hidden = true;
       status.textContent = `${message} Jarak tetap diperkirakan dari pusat Tebet, Jakarta; gunakan lokasi saya untuk hasil yang lebih akurat.`;
       if (state.cafes.some((cafe) => coords(cafe)))
@@ -362,8 +387,11 @@
       );
       return;
     }
-    button.disabled = true;
-    status.textContent = "Meminta izin lokasi…";
+    if (!automatic) button.disabled = true;
+    status.textContent = automatic
+      ? "Izin lokasi sudah aktif; mendeteksi area perangkat…"
+      : "Meminta izin lokasi…";
+    if (!automatic) setHeaderLocation("Mendeteksi lokasi…");
     const succeed = (position) => {
       const lat = position?.coords?.latitude,
         lon = position?.coords?.longitude;
@@ -380,15 +408,33 @@
       state.location = { lat, lon };
       state.locationSource = "device";
       $("#clearLocation").hidden = false;
+      $("#nearestSortOption").textContent = "Terdekat dari lokasi saya";
+      const requestId = ++state.locationLabelRequest;
+      setHeaderLocation("Menentukan area…");
       const known = state.cafes.some((cafe) => coords(cafe));
       const accuracy = Number.isFinite(position.coords.accuracy)
         ? ` (akurasi ±${Math.round(position.coords.accuracy)} m)`
         : "";
       status.textContent = known
-        ? `Lokasi perangkat aktif${accuracy}. Jarak garis lurus ditampilkan; koordinatmu hanya dipakai di tab ini dan tidak disimpan.`
-        : `Lokasi perangkat aktif${accuracy}, tetapi koordinat kafe belum dilengkapi. Lokasi hanya dipakai di tab ini dan tidak disimpan.`;
+        ? `Lokasi GPS aktif${accuracy}. Jarak garis lurus dihitung di tab ini; untuk nama area, hanya koordinat yang dibulatkan sekitar 100 m dikirim ke OpenStreetMap. Asal dibagikan ke Google Maps hanya jika kamu membuka petunjuk arah.`
+        : `Lokasi GPS aktif${accuracy}, tetapi koordinat kafe belum dilengkapi. Nama area dicari memakai titik yang dibulatkan sekitar 100 m lewat OpenStreetMap; asal dikirim ke Google Maps hanya jika kamu membuka petunjuk arah.`;
       if (known) $("#sortSelect").value = "nearest";
       render();
+      resolveLocationArea(lat, lon)
+        .then((area) => {
+          if (
+            requestId !== state.locationLabelRequest ||
+            state.locationSource !== "device"
+          )
+            return;
+          setHeaderLocation(area);
+          status.textContent = `Lokasi terdeteksi: ${area}${accuracy}. Untuk jarak dipakai titik GPS perangkat; ke OpenStreetMap hanya dikirim titik yang dibulatkan sekitar 100 m.`;
+        })
+        .catch(() => {
+          if (requestId !== state.locationLabelRequest) return;
+          setHeaderLocation("Lokasi GPS aktif");
+          status.textContent = `Lokasi GPS aktif${accuracy}, tetapi nama area belum tersedia. Jarak tetap memakai titik perangkat di tab ini.`;
+        });
     };
     const fail = (error, canRetry = true) => {
       if (canRetry && (error.code === 2 || error.code === 3)) {
@@ -504,21 +550,34 @@
   $("#areaSelect").addEventListener("change", render);
   $("#sortSelect").addEventListener("change", render);
   $("#clearFilters").addEventListener("click", reset);
-  $("#locationButton").addEventListener("click", locate);
+  $("#locationButton").addEventListener("click", () => locate());
   $("#clearLocation").addEventListener("click", () => {
     state.location = { ...TEBET_FALLBACK };
     state.locationSource = "tebet";
+    state.locationLabelRequest += 1;
+    setHeaderLocation("Tebet, Jakarta · perkiraan");
+    $("#nearestSortOption").textContent = "Terdekat dari Tebet (perkiraan)";
     $("#clearLocation").hidden = true;
     $("#locationStatus").textContent =
       "Lokasi perangkat dihapus dari tab ini. Jarak kembali diperkirakan dari pusat Tebet, Jakarta.";
     render();
   });
+  function locateAutomaticallyIfAlreadyAllowed() {
+    if (!navigator.geolocation || !navigator.permissions?.query) return;
+    navigator.permissions
+      .query({ name: "geolocation" })
+      .then((permission) => {
+        if (permission.state === "granted") locate({ automatic: true });
+      })
+      .catch(() => {});
+  }
   async function init() {
     try {
       const data = await request("/api/cafes");
       state.cafes = Array.isArray(data) ? data : [];
       $("#status").hidden = true;
       render();
+      locateAutomaticallyIfAlreadyAllowed();
     } catch (error) {
       $("#status").className = "status error";
       $("#status").textContent =

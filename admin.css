@@ -368,6 +368,16 @@ select:focus {
   grid-template-columns: 1fr 1fr;
   gap: 0 12px;
 }
+.full-field {
+  grid-column: 1 / -1;
+}
+.full-field small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 400;
+}
 .form > label,
 .grid label {
   margin: 7px 0;

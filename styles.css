@@ -518,6 +518,12 @@ a {
   font-size: 12px;
   margin: 0 0 18px;
 }
+.detail-address {
+  color: var(--muted);
+  font-size: 11px;
+  margin: -12px 0 17px;
+  overflow-wrap: anywhere;
+}
 .detail-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -582,9 +588,35 @@ a {
   font-weight: 700;
 }
 .wifi-box code {
+  flex: 1 1 100%;
   width: 100%;
   color: var(--green);
   font-weight: 700;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.wifi-box .wifi-copy-status {
+  flex-basis: 100%;
+  min-height: 14px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.wifi-copy-status.success {
+  color: #527142;
+}
+.wifi-copy-status.error {
+  color: #a94638;
+}
+.wifi-box button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+.clipboard-temp {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 .tested-note {
   margin-top: 9px !important;

@@ -5,7 +5,9 @@
     mapButton = $("#resolveMapButton"),
     mapStatus = $("#mapResolveStatus");
   let lastResolvedUrl = "",
-    resolving = false;
+    resolving = false,
+    activeMapRequest = null,
+    mapImportTimer = 0;
   async function resolveMap(force = false) {
     const url = String(mapInput?.value || "").trim();
     if (!url) {
@@ -15,9 +17,12 @@
     }
     if (resolving || (!force && url === lastResolvedUrl)) return;
     resolving = true;
+    const controller = new AbortController();
+    const request = { url, controller };
+    activeMapRequest = request;
     mapButton.disabled = true;
     mapButton.textContent = "Membaca lokasi…";
-    mapStatus.textContent = "Mencari nama tempat, area, dan koordinat…";
+    mapStatus.textContent = "Mencari nama tempat, alamat, rating, dan koordinat…";
     mapStatus.className = "field-status";
     try {
       const r = await fetch(
@@ -26,9 +31,11 @@
           credentials: "same-origin",
           headers: { Accept: "application/json" },
           cache: "no-store",
+          signal: controller.signal,
         },
       );
       const data = await r.json().catch(() => ({}));
+      if (controller.signal.aborted || mapInput.value.trim() !== url) return;
       if (!r.ok)
         throw new Error(data.error || "Tautan Maps tidak dapat dibaca.");
       let f = $("#cafeForm");
@@ -44,6 +51,7 @@
       f.elements.mapUrl.value = data.mapUrl || url;
       if (data.name) f.elements.name.value = data.name;
       if (data.area) f.elements.area.value = data.area;
+      if (data.address) f.elements.address.value = data.address;
       if (data.latitude !== null && data.latitude !== undefined)
         f.elements.latitude.value = data.latitude;
       if (data.longitude !== null && data.longitude !== undefined)
@@ -60,30 +68,73 @@
         data.googleRating == null
           ? "rating Google belum terbaca"
           : `Google Maps ★ ${Number(data.googleRating).toFixed(1)}${data.googleRatingCount == null ? "" : ` · ${data.googleRatingCount} ulasan`}`;
+      const addressSummary = data.address ? " · alamat lengkap tersedia" : "";
       mapStatus.textContent = existing
-        ? `Data ${existing.name} sudah terdaftar. Formulir edit dibuka dan diisi dari Maps; data lain tetap dipertahankan. ${googleRating}. Periksa lalu simpan.`
-        : `Terisi: ${data.name || "nama tempat"} · ${data.area || "area belum terbaca"}${data.latitude != null ? " · koordinat tersedia" : ""} · ${googleRating}. Semua isian dapat diedit; periksa sebelum menyimpan.`;
+        ? `Data ${existing.name} sudah terdaftar. Formulir edit dibuka dan diisi dari Maps; data lain tetap dipertahankan${addressSummary}. ${googleRating}. Periksa lalu simpan.`
+        : `Terisi: ${data.name || "nama tempat"} · ${data.area || "area belum terbaca"}${addressSummary}${data.latitude != null ? " · koordinat tersedia" : ""} · ${googleRating}. Semua isian dapat diedit; periksa sebelum menyimpan.`;
       if (data.importNotice) mapStatus.textContent += ` ${data.importNotice}`;
       mapStatus.className =
         existing || data.importNotice ? "field-status" : "field-status success";
     } catch (e) {
+      if (e.name === "AbortError") return;
       mapStatus.textContent = e.message || "Tautan Maps tidak dapat dibaca.";
       mapStatus.className = "field-status error";
     } finally {
-      resolving = false;
-      mapButton.disabled = false;
-      mapButton.textContent = "Impor dari Google Maps";
+      if (activeMapRequest === request) {
+        activeMapRequest = null;
+        resolving = false;
+        mapButton.disabled = false;
+        mapButton.textContent = "Ambil data dari Maps";
+      }
     }
+  }
+  function isGoogleMapsUrl(value) {
+    try {
+      const url = new URL(value);
+      const host = url.hostname.toLowerCase();
+      const shortLink = host === "maps.app.goo.gl" || host === "goo.gl";
+      const googleHost =
+        host === "google.com" ||
+        host.endsWith(".google.com") ||
+        host === "google.co.id" ||
+        host.endsWith(".google.co.id");
+      return (
+        url.protocol === "https:" &&
+        (shortLink ||
+          (googleHost &&
+            (host.startsWith("maps.") || /^\/(?:maps|url)(?:\/|$)/i.test(url.pathname))))
+      );
+    } catch {
+      return false;
+    }
+  }
+  function scheduleMapImport(delay = 450) {
+    clearTimeout(mapImportTimer);
+    const url = String(mapInput?.value || "").trim();
+    if (!isGoogleMapsUrl(url) || url === lastResolvedUrl) return;
+    mapImportTimer = window.setTimeout(() => resolveMap(), delay);
   }
   mapButton?.addEventListener("click", () => resolveMap(true));
   mapInput?.addEventListener("input", () => {
-    if (mapInput.value.trim() !== lastResolvedUrl) lastResolvedUrl = "";
+    const url = mapInput.value.trim();
+    if (url !== lastResolvedUrl) lastResolvedUrl = "";
+    if (activeMapRequest && activeMapRequest.url !== url)
+      activeMapRequest.controller.abort();
+    scheduleMapImport();
   });
-  mapInput?.addEventListener("paste", () => setTimeout(() => resolveMap(), 80));
-  mapInput?.addEventListener("change", () => resolveMap());
+  mapInput?.addEventListener("paste", () =>
+    setTimeout(() => scheduleMapImport(0), 0),
+  );
+  mapInput?.addEventListener("change", () => scheduleMapImport(0));
   window.__NyambungAdmin = window.__NyambungAdmin || {};
   window.__NyambungAdmin.resetMapResolver = () => {
+    clearTimeout(mapImportTimer);
+    activeMapRequest?.controller.abort();
+    activeMapRequest = null;
+    resolving = false;
     lastResolvedUrl = "";
+    mapButton.disabled = false;
+    mapButton.textContent = "Ambil data dari Maps";
     mapStatus.textContent =
       "Tempel tautan Google Maps untuk mengisi data tempat secara otomatis; periksa sebelum menyimpan.";
     mapStatus.className = "field-status";

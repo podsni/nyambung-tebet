@@ -349,6 +349,7 @@ try {
     method: "POST",
     body: {
       ...cafeInput("Uji lokal foto"),
+      address: "Jl. Contoh No. 12, Tebet, Jakarta Selatan",
       photoKey: uploaded.data.photoKey,
       latitude: -6.226,
       longitude: 106.852,
@@ -362,6 +363,7 @@ try {
   assert.equal(a.response.status, 201);
   const aPublic = (await api(`/api/cafes/${a.data.id}`)).data;
   assert.equal(aPublic.photoUrl, uploaded.data.photoUrl);
+  assert.equal(aPublic.address, "Jl. Contoh No. 12, Tebet, Jakarta Selatan");
   assert.equal(aPublic.latitude, -6.226);
   assert.equal(aPublic.provider, "Penyedia uji lokal");
   assert.equal(aPublic.googleRating, 4.7);
@@ -445,6 +447,7 @@ try {
     "nyambungRating",
     "nyambungRatingCount",
     "updatedAt",
+    "address",
   ].forEach((key) => delete backupExisting[key]);
   const backupNew = {
     ...cafeInput("Uji impor cadangan baru"),
@@ -469,12 +472,13 @@ try {
     method: "POST",
     body: importBody,
   });
-  assert.equal(restored.response.status, 200);
+  assert.equal(restored.response.status, 200, JSON.stringify(restored.data));
   assert.equal(restored.data.updated, 1);
   assert.equal(restored.data.added, 1);
   assert.equal((await list()).length, beforeImportCount + 1);
   const afterRestore = (await api(`/api/cafes/${a.data.id}`)).data;
   assert.equal(afterRestore.googleRating, 4.9);
+  assert.equal(afterRestore.address, "Jl. Contoh No. 12, Tebet, Jakarta Selatan");
   assert.equal(afterRestore.photoUrl, uploaded.data.photoUrl);
   assert.equal(afterRestore.nyambungRating, 4);
   assert.equal(afterRestore.nyambungRatingCount, 2);

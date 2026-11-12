@@ -223,6 +223,7 @@ function photoUrl(value) {
 function normalizeCafe(input) {
   const name = text(input.name, "Nama kafe", 70, true);
   const area = text(input.area, "Area", 70, true);
+  const address = text(input.address, "Alamat", 240);
   const mapUrl = text(input.mapUrl, "Tautan Maps", 500);
   if (mapUrl) {
     let url;
@@ -257,6 +258,7 @@ function normalizeCafe(input) {
   return {
     name,
     area,
+    address,
     googleRating,
     googleRatingCount,
     down: nullableNumber(input.down, "Kecepatan download", 0, 100000),
@@ -300,6 +302,7 @@ function publicCafe(row) {
     id: row.id,
     name: row.name,
     area: row.area,
+    address: row.address || "",
     googleRating: row.google_rating,
     googleRatingCount: row.google_rating_count,
     nyambungRating: row.nyambung_rating ?? 0,
@@ -344,6 +347,7 @@ function adminCafe(row) {
 const CAFE_SAVE_COLUMNS = [
   "name",
   "area",
+  "address",
   "google_rating",
   "google_rating_count",
   "down_mbps",
@@ -380,6 +384,7 @@ function cafeDbValues(cafe) {
   return [
     cafe.name,
     cafe.area,
+    cafe.address,
     cafe.googleRating,
     cafe.googleRatingCount,
     cafe.down,
@@ -551,7 +556,7 @@ function placeFromMapsUrl(url, originalUrl) {
   return {
     name,
     area,
-    address: parts.join(", "),
+    address: parts.join(", ").slice(0, 240),
     mapUrl: originalUrl,
     ...coordinatesFromMapsUrl(url),
   };
@@ -1105,14 +1110,18 @@ async function importCafeBackup(request, env) {
       if (seenPlaces.some((previous) => sameCafePlace(cafe, previous)))
         throw new Error("Berkas berisi kafe yang terduplikasi.");
       seenPlaces.push(cafe);
-      incoming.push({ sourceId: item.id, cafe });
+      incoming.push({
+        sourceId: item.id,
+        cafe,
+        sourceHasAddress: Object.prototype.hasOwnProperty.call(item, "address"),
+      });
     }
   } catch (error) {
     return json({ error: error.message || "Data cadangan tidak valid." }, 400);
   }
 
   const { results: rows } = await env.DB.prepare(
-    "SELECT id,name,area,map_url,latitude,longitude,photo_key,updated_at FROM cafes",
+    "SELECT id,name,area,address,map_url,latitude,longitude,photo_key,updated_at FROM cafes",
   ).all();
   if (rows.length !== body.expectedCount)
     return json(
@@ -1124,7 +1133,7 @@ async function importCafeBackup(request, env) {
     newPhotoKeys = new Set(),
     plan = [];
   for (let index = 0; index < incoming.length; index++) {
-    const { sourceId, cafe } = incoming[index];
+    const { sourceId, cafe, sourceHasAddress } = incoming[index];
     const target =
       rows.find((row) => row.id === sourceId) ||
       rows.find((row) => sameCafePlace(cafe, row)) ||
@@ -1164,7 +1173,12 @@ async function importCafeBackup(request, env) {
         return json({ error: error.message || "Referensi foto cadangan tidak valid." }, 400);
       }
     }
-    plan.push({ sourceId, cafe, target });
+    plan.push({
+      sourceId,
+      cafe,
+      target,
+      sourceHasAddress,
+    });
   }
 
   const preservedColumns = new Set([
@@ -1184,6 +1198,8 @@ async function importCafeBackup(request, env) {
     added = 0;
   for (const item of plan) {
     const values = cafeDbValues(item.cafe);
+    if (item.target && !item.sourceHasAddress)
+      values[CAFE_SAVE_COLUMNS.indexOf("address")] = item.target.address || "";
     if (item.target) {
       statements.push(
         env.DB.prepare(

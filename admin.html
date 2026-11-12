@@ -7,8 +7,8 @@
     <title>Admin — Nyambung</title>
     <link rel="stylesheet" href="admin.css" />
     <script src="speedtest.js" defer></script>
-    <script src="admin.js?v=backup-location-2" defer></script>
-    <script src="admin-enhancements.js?v=backup-location-2" defer></script>
+    <script src="admin.js?v=maps-address-copy-1" defer></script>
+    <script src="admin-enhancements.js?v=maps-address-copy-1" defer></script>
   </head>
   <body>
     <header class="admin-header">
@@ -105,6 +105,8 @@
         <div class="grid">
           <label>Nama kafe *<input name="name" required maxlength="70" /></label
           ><label>Area *<input name="area" required maxlength="70" /></label
+          ><label class="full-field"
+            >Alamat lengkap<input name="address" maxlength="240" autocomplete="street-address" /><small>Diisi dari Google Maps jika tersedia; periksa dan edit sebelum menyimpan.</small></label
           ><label
             >Rating Google Maps<input
               name="googleRating"
@@ -219,13 +221,13 @@
         /></label>
         <div class="map-tools">
           <label
-            >Link Google Maps<input
+            >URL Google Maps<input
               name="mapUrl"
               type="url"
               maxlength="500"
-              placeholder="Tempel tautan Maps" /></label
+              placeholder="Tempel tautan Google Maps" /></label
           ><button id="resolveMapButton" class="secondary-action" type="button">
-            Impor dari Google Maps
+            Ambil data dari Maps
           </button>
         </div>
         <p
@@ -234,8 +236,9 @@
           role="status"
           aria-live="polite"
         >
-          Tempel tautan Google Maps untuk mengisi nama, area, koordinat, dan
-          rating Google jika tersedia. Periksa dan edit dulu sebelum menyimpan.
+          Tempel URL untuk mengisi nama, area, alamat, koordinat, dan rating
+          Google jika tersedia. Data akan dicoba otomatis; semua isian tetap bisa
+          diperiksa dan diedit sebelum disimpan.
         </p>
         <div class="location-fields">
           <label

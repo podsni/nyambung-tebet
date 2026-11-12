@@ -392,6 +392,7 @@
     const fields = [
       "name",
       "area",
+      "address",
       "googleRating",
       "googleRatingCount",
       "price",
@@ -437,6 +438,7 @@
     [
       "name",
       "area",
+      "address",
       "hours",
       "outlets",
       "prayer",

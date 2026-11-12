@@ -148,6 +148,23 @@
       throw new Error(body?.error || `Permintaan gagal (${response.status})`);
     return body;
   }
+  function copyTextFallback(value) {
+    const field = document.createElement("textarea");
+    field.value = value;
+    field.readOnly = true;
+    field.tabIndex = -1;
+    field.className = "clipboard-temp";
+    field.setAttribute("aria-hidden", "true");
+    document.body.append(field);
+    field.select();
+    let copied = false;
+    try {
+      copied = document.execCommand("copy");
+    } finally {
+      field.remove();
+    }
+    if (!copied) throw new Error("Clipboard tidak tersedia.");
+  }
   function safePhoto(cafe) {
     if (!cafe?.photoUrl) return "";
     try {
@@ -294,7 +311,7 @@
       const detail = await request(`/api/cafes/${encodeURIComponent(id)}`);
       if (!modal.open || ticket !== state.detailRequest) return;
       const wifi = detail.wifiPassword
-        ? `<div class="wifi-box"><strong>${esc(detail.ssid || "Wi-Fi")}</strong><button id="revealPassword" type="button">Tampilkan password</button><code id="wifiPassword" hidden>${esc(detail.wifiPassword)}</code></div>`
+        ? `<div class="wifi-box"><strong>${esc(detail.ssid || "Wi-Fi")}</strong><button id="revealPassword" type="button">Tampilkan password</button><code id="wifiPassword" hidden>${esc(detail.wifiPassword)}</code><button id="copyWifiPassword" type="button" hidden>Salin password</button><span id="wifiCopyStatus" class="wifi-copy-status" role="status" aria-live="polite"></span></div>`
         : '<div class="wifi-box"><strong>Password belum dibagikan</strong><span>Konfirmasi langsung ke kafe sebelum tersambung.</span></div>';
       const provider = detail.provider
         ? `<p>Provider tercatat: <strong>${esc(detail.provider)}</strong>.</p>`
@@ -322,10 +339,38 @@
         : "Belum ada rating pengguna";
       const ratingPanel = `<section class="rating-panel" aria-labelledby="ratingPanelTitle"><h3 id="ratingPanelTitle">Rating dari dua sumber</h3><p class="rating-source"><strong>Google Maps</strong><span>${esc(googleSummary)}</span></p><p class="rating-source"><strong>Nyambung</strong><span><b id="nyambungAggregate">${esc(communityCount ? `★ ${(communityRating || 0).toFixed(1)}/5` : "—")}</b> <span id="nyambungCount">${esc(communityCount ? `· ${communityCount} rating pengguna` : "· Belum ada rating pengguna")}</span></span></p><form id="ratingForm" data-cafe-id="${esc(detail.id)}"><fieldset class="rating-picker"><legend>Beri rating Nyambung</legend>${ratingOptions}</fieldset><button class="secondary-button" type="submit">${myRating ? "Perbarui rating" : "Kirim rating"}</button><p id="ratingStatus" class="rating-status" role="status" aria-live="polite">${myRating ? `Ratingmu saat ini ${myRating}/5; kamu dapat mengubahnya.` : "Satu rating per browser; rating Google Maps tidak berubah."}</p></form></section>`;
       $("#detailContent").innerHTML =
-        `<button class="modal-close" type="button" data-close aria-label="Tutup detail">×</button>${photoMarkup(detail, true)}<p class="eyebrow">DETAIL SPOT</p><h2 id="detailTitle">${esc(detail.name || cafe.name)}</h2><p class="detail-area">${esc(detail.area || "")}${detail.hours ? ` · ${esc(detail.hours)}` : ""}</p>${ratingPanel}<div class="detail-stats"><div><strong>${speed(detail.down, "Mbps")}</strong><span>Download</span></div><div><strong>${speed(detail.up, "Mbps")}</strong><span>Upload</span></div><div><strong>${speed(detail.ping, "ms")}</strong><span>Ping</span></div></div><section><h3>Fasilitas & suasana</h3><p>${esc(label("outlets", detail.outlets))} · ${esc(label("prayer", detail.prayer))} · ${esc(label("stability", detail.stability))}${detail.comfort ? ` · Kenyamanan ${esc(detail.comfort)}/5` : ""}${detail.smoking ? ` · ${esc(detail.smoking)}` : ""}</p></section><section><h3>Wi-Fi</h3>${wifi}${provider}${tested}<p>Data berdasarkan catatan kunjungan dan dapat berubah.</p></section><div class="modal-actions"><a class="primary-button" href="${esc(mapUrl(detail))}" target="_blank" rel="noopener">Buka petunjuk arah ↗</a><button class="secondary-button" type="button" data-close>Tutup</button></div>`;
+        `<button class="modal-close" type="button" data-close aria-label="Tutup detail">×</button>${photoMarkup(detail, true)}<p class="eyebrow">DETAIL SPOT</p><h2 id="detailTitle">${esc(detail.name || cafe.name)}</h2><p class="detail-area">${esc(detail.area || "")}${detail.hours ? ` · ${esc(detail.hours)}` : ""}</p>${detail.address ? `<p class="detail-address">Alamat: ${esc(detail.address)}</p>` : ""}${ratingPanel}<div class="detail-stats"><div><strong>${speed(detail.down, "Mbps")}</strong><span>Download</span></div><div><strong>${speed(detail.up, "Mbps")}</strong><span>Upload</span></div><div><strong>${speed(detail.ping, "ms")}</strong><span>Ping</span></div></div><section><h3>Fasilitas & suasana</h3><p>${esc(label("outlets", detail.outlets))} · ${esc(label("prayer", detail.prayer))} · ${esc(label("stability", detail.stability))}${detail.comfort ? ` · Kenyamanan ${esc(detail.comfort)}/5` : ""}${detail.smoking ? ` · ${esc(detail.smoking)}` : ""}</p></section><section><h3>Wi-Fi</h3>${wifi}${provider}${tested}<p>Data berdasarkan catatan kunjungan dan dapat berubah.</p></section><div class="modal-actions"><a class="primary-button" href="${esc(mapUrl(detail))}" target="_blank" rel="noopener">Buka petunjuk arah ↗</a><button class="secondary-button" type="button" data-close>Tutup</button></div>`;
       $("#revealPassword")?.addEventListener("click", () => {
         $("#wifiPassword").hidden = false;
+        $("#copyWifiPassword").hidden = false;
         $("#revealPassword").hidden = true;
+      });
+      $("#copyWifiPassword")?.addEventListener("click", async (event) => {
+        const button = event.currentTarget;
+        const status = $("#wifiCopyStatus");
+        const password = $("#wifiPassword")?.textContent || "";
+        button.disabled = true;
+        button.textContent = "Menyalin…";
+        try {
+          if (navigator.clipboard?.writeText && window.isSecureContext) {
+            try {
+              await navigator.clipboard.writeText(password);
+            } catch {
+              copyTextFallback(password);
+            }
+          } else {
+            copyTextFallback(password);
+          }
+          status.textContent = "Password berhasil disalin.";
+          status.className = "wifi-copy-status success";
+          button.textContent = "Tersalin";
+        } catch {
+          status.textContent = "Tidak berhasil menyalin. Tekan lama password untuk menyalinnya manual.";
+          status.className = "wifi-copy-status error";
+          button.textContent = "Coba salin lagi";
+        } finally {
+          button.disabled = false;
+        }
       });
     } catch (error) {
       if (!modal.open || ticket !== state.detailRequest) return;

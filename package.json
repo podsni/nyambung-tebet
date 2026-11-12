@@ -11,6 +11,7 @@
     "build": "node build-assets.mjs",
     "dev": "npm run build && wrangler dev",
     "test": "node tests/api-integration.mjs",
+    "test:maps": "node tests/google-maps-import.mjs",
     "test:syntax": "node --check worker.js && node --check app.js && node --check admin.js && node --check admin-enhancements.js && node --check speedtest.js && node --check public-speedtest.js"
   },
   "devDependencies": {

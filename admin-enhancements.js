@@ -6,14 +6,14 @@
     mapStatus = $("#mapResolveStatus");
   let lastResolvedUrl = "",
     resolving = false;
-  async function resolveMap() {
+  async function resolveMap(force = false) {
     const url = String(mapInput?.value || "").trim();
     if (!url) {
       mapStatus.textContent = "Tempel tautan Google Maps terlebih dahulu.";
       mapStatus.className = "field-status error";
       return;
     }
-    if (resolving || url === lastResolvedUrl) return;
+    if (resolving || (!force && url === lastResolvedUrl)) return;
     resolving = true;
     mapButton.disabled = true;
     mapButton.textContent = "Membaca lokasi…";
@@ -63,7 +63,9 @@
       mapStatus.textContent = existing
         ? `Data ${existing.name} sudah terdaftar. Formulir edit dibuka dan diisi dari Maps; data lain tetap dipertahankan. ${googleRating}. Periksa lalu simpan.`
         : `Terisi: ${data.name || "nama tempat"} · ${data.area || "area belum terbaca"}${data.latitude != null ? " · koordinat tersedia" : ""} · ${googleRating}. Semua isian dapat diedit; periksa sebelum menyimpan.`;
-      mapStatus.className = existing ? "field-status" : "field-status success";
+      if (data.importNotice) mapStatus.textContent += ` ${data.importNotice}`;
+      mapStatus.className =
+        existing || data.importNotice ? "field-status" : "field-status success";
     } catch (e) {
       mapStatus.textContent = e.message || "Tautan Maps tidak dapat dibaca.";
       mapStatus.className = "field-status error";
@@ -73,12 +75,12 @@
       mapButton.textContent = "Impor dari Google Maps";
     }
   }
-  mapButton?.addEventListener("click", resolveMap);
+  mapButton?.addEventListener("click", () => resolveMap(true));
   mapInput?.addEventListener("input", () => {
     if (mapInput.value.trim() !== lastResolvedUrl) lastResolvedUrl = "";
   });
-  mapInput?.addEventListener("paste", () => setTimeout(resolveMap, 80));
-  mapInput?.addEventListener("change", resolveMap);
+  mapInput?.addEventListener("paste", () => setTimeout(() => resolveMap(), 80));
+  mapInput?.addEventListener("change", () => resolveMap());
   window.__NyambungAdmin = window.__NyambungAdmin || {};
   window.__NyambungAdmin.resetMapResolver = () => {
     lastResolvedUrl = "";

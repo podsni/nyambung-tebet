@@ -429,6 +429,46 @@ function googleMapsHostAllowed(url) {
   );
 }
 
+function canonicalGoogleMapsUrl(url) {
+  const canonical = new URL(url.href);
+  if (
+    ["maps.google.com", "maps.google.co.id"].includes(canonical.hostname) &&
+    (canonical.pathname === "/" || /^\/maps(?:\/|$)/i.test(canonical.pathname))
+  ) {
+    canonical.hostname = canonical.hostname.replace(/^maps\./, "www.");
+    if (canonical.pathname === "/") canonical.pathname = "/maps";
+  }
+  return canonical;
+}
+
+function googleMapsDetailsBlocked(url) {
+  const host = url.hostname.toLowerCase();
+  const googleHost =
+    host === "google.com" ||
+    host.endsWith(".google.com") ||
+    host === "google.co.id" ||
+    host.endsWith(".google.co.id");
+  return (
+    url.protocol === "https:" &&
+    (!url.port || url.port === "443") &&
+    !url.username &&
+    !url.password &&
+    googleHost &&
+    (/^\/sorry(?:\/|$)/i.test(url.pathname) ||
+      (host.startsWith("consent.google.") && /^\/(?:m|ml)(?:\/|$)/i.test(url.pathname)))
+  );
+}
+
+function mapsPlaceWithoutDetails(place) {
+  return {
+    ...place,
+    googleRating: null,
+    googleRatingCount: null,
+    importNotice:
+      "Nama dan alamat berhasil dibaca. Google sedang membatasi detail otomatis; koordinat atau rating yang belum tersedia dapat dilengkapi manual atau dicoba lagi.",
+  };
+}
+
 function mapsError(message, status = 400) {
   const error = new Error(message);
   error.status = status;
@@ -638,6 +678,7 @@ async function resolveGoogleMapsPlace(rawUrl) {
   if (!googleMapsHostAllowed(current))
     throw mapsError("Gunakan tautan Google Maps atau maps.app.goo.gl.");
   const originalUrl = current.href;
+  current = canonicalGoogleMapsUrl(current);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12000);
   let place = null;
@@ -660,7 +701,15 @@ async function resolveGoogleMapsPlace(rawUrl) {
       if (response.status < 300 || response.status >= 400) break;
       const location = response.headers.get("Location");
       if (!location) break;
-      current = new URL(location, current);
+      const next = new URL(location, current);
+      if (googleMapsDetailsBlocked(next)) {
+        if (place) return mapsPlaceWithoutDetails(place);
+        throw mapsError(
+          "Google sedang membatasi pembacaan tautan ini. Coba lagi atau isi data tempat secara manual.",
+          502,
+        );
+      }
+      current = canonicalGoogleMapsUrl(next);
       if (!googleMapsHostAllowed(current))
         throw mapsError("Tautan mengarah ke alamat yang tidak didukung.");
       try {
@@ -672,17 +721,19 @@ async function resolveGoogleMapsPlace(rawUrl) {
     if (!googleMapsHostAllowed(current))
       throw mapsError("Tautan mengarah ke alamat yang tidak didukung.");
     if (!response || response.status >= 400)
-      if (place)
-        return {
-          ...place,
-          googleRating: null,
-          googleRatingCount: null,
-        };
+      if (place) return mapsPlaceWithoutDetails(place);
       else throw mapsError("Google Maps menolak tautan tersebut.", 502);
 
     const html = await limitedText(response);
-    place = place || placeFromMapsUrl(current, originalUrl);
     const previewUrl = googlePreviewHref(html, current.href);
+    if (!place) {
+      try {
+        place = placeFromMapsUrl(current, originalUrl);
+      } catch (error) {
+        if (!previewUrl || !googleMapsHostAllowed(previewUrl)) throw error;
+        place = placeFromMapsUrl(previewUrl, originalUrl);
+      }
+    }
     let rating = {
       googleRating: null,
       googleRatingCount: null,
@@ -716,12 +767,7 @@ async function resolveGoogleMapsPlace(rawUrl) {
     };
   } catch (error) {
     if (error.status && !(error.status >= 500 && place)) throw error;
-    if (place)
-      return {
-        ...place,
-        googleRating: null,
-        googleRatingCount: null,
-      };
+    if (place) return mapsPlaceWithoutDetails(place);
     throw mapsError(
       error?.name === "AbortError"
         ? "Google Maps tidak merespons tepat waktu."

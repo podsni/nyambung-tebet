@@ -33,6 +33,14 @@
     Number.isFinite(Number(value))
       ? Number(value)
       : null;
+  function formatTimestamp(value, includeTime = true) {
+    const timestamp = Date.parse(value || "");
+    if (!Number.isFinite(timestamp)) return "";
+    const options = includeTime
+      ? { dateStyle: "medium", timeStyle: "short" }
+      : { day: "numeric", month: "short", year: "numeric" };
+    return new Date(timestamp).toLocaleString("id-ID", options);
+  }
   function loadUserRatings() {
     try {
       const value = JSON.parse(localStorage.getItem("nyambung-user-ratings") || "{}");
@@ -239,6 +247,15 @@
   function sorted(list) {
     const mode = $("#sortSelect").value;
     return [...list].sort((a, b) => {
+      if (mode === "updated") {
+        const difference =
+          (Date.parse(b.updatedAt || "") || 0) -
+          (Date.parse(a.updatedAt || "") || 0);
+        return (
+          difference ||
+          String(a.name || "").localeCompare(String(b.name || ""), "id")
+        );
+      }
       if (mode === "nearest" && state.location) {
         const ca = coords(a),
           cb = coords(b);
@@ -275,15 +292,29 @@
   }
   function card(cafe) {
     const download = num(cafe.down),
-      c = coords(cafe);
+      c = coords(cafe),
+      updated = formatTimestamp(cafe.updatedAt, false);
     const km =
       state.location && c
         ? `<span class="distance" title="${state.locationSource === "tebet" ? "Perkiraan jarak dari pusat Tebet" : "Jarak garis lurus perkiraan dari lokasimu"}">${state.locationSource === "tebet" ? "~" : ""}${distance(state.location, c).toFixed(1)} km</span>`
         : "";
-    return `<article class="cafe-card">${photoMarkup(cafe)}<div class="card-heading"><button class="card-title" type="button" data-detail="${esc(cafe.id)}"><strong>${esc(cafe.name || "Tanpa nama")}</strong><span>${esc(cafe.area || "Area belum dicatat")} ${km}</span></button></div>${ratingMarkup(cafe)}<div class="speed"><strong>${download === null ? "—" : Math.round(download)}</strong><span>Mbps download</span>${download !== null && download >= 50 ? "<b>Wi-Fi cepat</b>" : ""}</div><div class="tags"><span>${esc(label("outlets", cafe.outlets))}</span><span>${esc(label("prayer", cafe.prayer))}</span></div><div class="card-footer"><button class="detail-link" type="button" data-detail="${esc(cafe.id)}">Lihat detail →</button><span class="password ${cafe.hasPassword ? "available" : ""}">${cafe.hasPassword ? "Password tercatat" : "Password belum dicatat"}</span><a href="${esc(mapUrl(cafe))}" target="_blank" rel="noopener">Arah ↗</a></div></article>`;
+    return `<article class="cafe-card">${photoMarkup(cafe)}<div class="card-heading"><button class="card-title" type="button" data-detail="${esc(cafe.id)}"><strong>${esc(cafe.name || "Tanpa nama")}</strong><span>${esc(cafe.area || "Area belum dicatat")} ${km}</span></button></div>${updated ? `<span class="card-updated">Diperbarui ${esc(updated)}</span>` : ""}${ratingMarkup(cafe)}<div class="speed"><strong>${download === null ? "—" : Math.round(download)}</strong><span>Mbps download</span>${download !== null && download >= 50 ? "<b>Wi-Fi cepat</b>" : ""}</div><div class="tags"><span>${esc(label("outlets", cafe.outlets))}</span><span>${esc(label("prayer", cafe.prayer))}</span></div><div class="card-footer"><button class="detail-link" type="button" data-detail="${esc(cafe.id)}">Lihat detail →</button><span class="password ${cafe.hasPassword ? "available" : ""}">${cafe.hasPassword ? "Password tercatat" : "Password belum dicatat"}</span><a href="${esc(mapUrl(cafe))}" target="_blank" rel="noopener">Arah ↗</a></div></article>`;
+  }
+  function renderFreshness() {
+    const latest = state.cafes.reduce((current, cafe) => {
+      const timestamp = Date.parse(cafe.updatedAt || "");
+      return Number.isFinite(timestamp) && (!current || timestamp > current.timestamp)
+        ? { cafe, timestamp }
+        : current;
+    }, null);
+    const count = state.cafes.length;
+    $("#freshnessText").textContent = latest
+      ? `Terakhir diperbarui: ${latest.cafe.name} · ${formatTimestamp(latest.cafe.updatedAt)}. ${count} kafe tersimpan.`
+      : `${count} kafe tersimpan. Waktu pembaruan belum tersedia.`;
   }
   function render() {
     updateAreas();
+    renderFreshness();
     const nearest = $("#sortSelect").querySelector('option[value="nearest"]');
     const hasCoordinates = state.cafes.some((cafe) => coords(cafe));
     nearest.disabled = !state.location || !hasCoordinates;
@@ -319,9 +350,14 @@
       const provider = detail.provider
         ? `<p>Provider tercatat: <strong>${esc(detail.provider)}</strong>.</p>`
         : "";
-      const tested = detail.testedAt
-        ? `<p class="tested-note">Pengukuran tersimpan · ${esc(new Date(detail.testedAt).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }))}. Ini bukan tes langsung perangkatmu.</p>`
-        : "";
+      const tested = [
+        detail.testedAt
+          ? `<p class="tested-note">Pengukuran tersimpan · ${esc(new Date(detail.testedAt).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }))}. Ini bukan tes langsung perangkatmu.</p>`
+          : "",
+        detail.updatedAt
+          ? `<p class="updated-note">Data kafe terakhir diperbarui · ${esc(formatTimestamp(detail.updatedAt))}.</p>`
+          : "",
+      ].join("");
       const googleRating = num(detail.googleRating);
       const googleRatingCount = num(detail.googleRatingCount);
       const communityRating = num(detail.nyambungRating);
@@ -598,6 +634,7 @@
   $("#areaSelect").addEventListener("change", render);
   $("#sortSelect").addEventListener("change", render);
   $("#clearFilters").addEventListener("click", reset);
+  $("#refreshDataButton").addEventListener("click", refreshData);
   $("#locationButton").addEventListener("click", () => locate());
   $("#clearLocation").addEventListener("click", () => {
     state.location = { ...TEBET_FALLBACK };
@@ -632,11 +669,38 @@
       });
     return cafeRequestPromise;
   }
+  async function refreshData() {
+    const button = $("#refreshDataButton"),
+      status = $("#refreshStatus");
+    button.disabled = true;
+    button.textContent = "Memperbarui…";
+    status.className = "";
+    status.textContent = "Mengambil data terbaru dari server…";
+    try {
+      await loadCafes();
+      status.textContent = `Daftar berhasil disinkronkan · ${state.cafes.length} kafe.`;
+      status.className = "refresh-success";
+    } catch {
+      status.textContent =
+        "Belum berhasil memperbarui. Data yang sudah tampil tetap dipertahankan.";
+      status.className = "refresh-error";
+    } finally {
+      button.disabled = false;
+      button.textContent = "Perbarui data";
+    }
+  }
   function refreshWhenPageReturns() {
     if (document.hidden) return;
     window.clearTimeout(focusRefreshTimer);
     focusRefreshTimer = window.setTimeout(() => {
-      if (!document.hidden) loadCafes().catch(() => {});
+      if (!document.hidden)
+        loadCafes().catch(() => {
+          if (state.cafes.length) {
+            $("#refreshStatus").textContent =
+              "Sinkronisasi otomatis belum berhasil; data yang tampil tetap dipakai.";
+            $("#refreshStatus").className = "refresh-error";
+          }
+        });
     }, 250);
   }
   async function init() {

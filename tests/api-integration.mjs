@@ -176,8 +176,12 @@ try {
     await delay(500);
   }
   assert.ok(ready, `Local Worker not ready: ${sanitize(logs.slice(-6000))}`);
-  const seeded = await list();
+  const initialListResponse = await api("/api/cafes");
+  const seeded = initialListResponse.data;
   assert.equal(seeded.length, 27);
+  assert.equal(initialListResponse.response.headers.get("cache-control"), "no-store");
+  assert.ok(seeded.every((cafe) => Date.parse(cafe.createdAt) > 0));
+  assert.ok(seeded.every((cafe) => Date.parse(cafe.updatedAt) > 0));
   assert.equal(seeded.find((cafe) => cafe.id === "agna")?.googleRating, 4.2);
   assert.ok(seeded.every((cafe) => cafe.nyambungRatingCount === 0));
   assert.ok(seeded.every((cafe) => "googleRating" in cafe));
@@ -362,6 +366,8 @@ try {
   });
   assert.equal(a.response.status, 201);
   const aPublic = (await api(`/api/cafes/${a.data.id}`)).data;
+  assert.ok(Date.parse(aPublic.createdAt) > 0);
+  assert.ok(Date.parse(aPublic.updatedAt) > 0);
   assert.equal(aPublic.photoUrl, uploaded.data.photoUrl);
   assert.equal(aPublic.address, "Jl. Contoh No. 12, Tebet, Jakarta Selatan");
   assert.equal(aPublic.latitude, -6.226);

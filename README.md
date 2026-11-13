@@ -4,7 +4,7 @@ Direktori kafe yang nyaman untuk kerja, dibuat untuk layar ponsel. Situs live: *
 
 ## Yang tersedia
 
-- Pencarian, filter fasilitas, pengurutan Wi-Fi, rating Nyambung atau Google Maps, detail tempat, tautan Maps, serta tombol salin untuk password yang admin setujui untuk dibagikan.
+- Pencarian, filter fasilitas, pengurutan berdasarkan pembaruan terbaru, Wi-Fi, rating Nyambung atau Google Maps, detail tempat, tautan Maps, serta tombol salin untuk password yang admin setujui untuk dibagikan. Waktu pembaruan terakhir per kafe dan tombol sinkronisasi membantu pengunjung memastikan mereka melihat data terbaru.
 - Foto pada kartu dan detail. Admin dapat menempel URL HTTPS langsung atau mengunggah JPEG/PNG/WebP; foto dioptimalkan di browser dan disimpan di R2. Tempat tanpa foto menampilkan placeholder yang jujur.
 - Jika izin lokasi browser sudah pernah diberikan, lokasi perangkat dicari otomatis setelah daftar kafe dimuat; jika browser perlu meminta izin, permintaan baru dimulai setelah tombol ditekan. Header menampilkan area yang terdeteksi secara perkiraan, termasuk saat berada di luar Tebet. Bila GPS tidak tersedia, Tebet, Jakarta ditandai jelas sebagai fallback. Koordinat presisi tetap di memori tab; untuk nama area, hanya koordinat yang dibulatkan sekitar 100 m yang diteruskan melalui Worker ke Photon/OpenStreetMap. Nyambung tidak menyimpan titik GPS ke D1. Saat pengguna sendiri membuka petunjuk arah, titik asal diteruskan ke Google Maps. Jarak tetap garis lurus, bukan jarak rute, dan pengurutan terdekat memerlukan koordinat kafe.
 - Speedtest HTTP Cloudflare dengan warm-up, beberapa sampel, progres, pembatalan, dan dua mode pemakaian data. Angka mengukur koneksi perangkat saat tes, bukan menguji Wi-Fi kafe dari jauh.

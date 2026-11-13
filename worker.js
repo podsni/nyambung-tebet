@@ -329,6 +329,8 @@ function publicCafe(row) {
     provider: row.provider || "",
     testedAt: row.tested_at || "",
     jitter: row.jitter_ms ?? null,
+    createdAt: row.created_at || "",
+    updatedAt: row.updated_at || "",
   };
 }
 

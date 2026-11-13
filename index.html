@@ -9,9 +9,9 @@
       content="Direktori kafe nyaman untuk kerja. Lokasi perangkat dapat dipakai untuk mencari tempat terdekat."
     />
     <title>Nyambung — Direktori kafe</title>
-    <link rel="stylesheet" href="styles.css?v=maps-address-copy-1" />
+    <link rel="stylesheet" href="styles.css?v=latest-data-1" />
     <script src="speedtest.js" defer></script>
-    <script src="app.js?v=public-refresh-2" defer></script>
+    <script src="app.js?v=latest-data-1" defer></script>
     <script src="public-speedtest.js" defer></script>
   </head>
   <body>
@@ -128,6 +128,7 @@
               >Urutkan
               <select id="sortSelect" aria-label="Urutkan kafe">
                 <option value="recommended">Rekomendasi</option>
+                <option value="updated">Pembaruan terbaru</option>
                 <option value="wifi">Wi-Fi tercepat</option>
                 <option value="upload">Upload tercepat</option>
                 <option value="outlets">Colokan terbanyak</option>
@@ -146,6 +147,16 @@
             >
               Hapus lokasi saya
             </button>
+          </div>
+        </div>
+        <div class="data-freshness">
+          <div class="data-freshness-copy">
+            <strong>Pembaruan data</strong>
+            <span id="freshnessText" role="status" aria-live="polite">Memuat info pembaruan…</span>
+          </div>
+          <div class="data-refresh-actions">
+            <span id="refreshStatus" role="status" aria-live="polite"></span>
+            <button id="refreshDataButton" class="refresh-data-button" type="button">Perbarui data</button>
           </div>
         </div>
         <label class="search-box directory-search"

@@ -12,6 +12,8 @@
     ratingDeviceId: "",
     userRatings: loadUserRatings(),
   };
+  let cafeRequestPromise = null;
+  let focusRefreshTimer = 0;
   const esc = (value) =>
     String(value ?? "").replace(
       /[&<>"']/g,
@@ -141,6 +143,7 @@
   async function request(url) {
     const response = await fetch(url, {
       credentials: "same-origin",
+      cache: "no-store",
       headers: { Accept: "application/json" },
     });
     const body = await response.json().catch(() => null);
@@ -616,12 +619,29 @@
       })
       .catch(() => {});
   }
+  function loadCafes() {
+    if (cafeRequestPromise) return cafeRequestPromise;
+    cafeRequestPromise = request("/api/cafes")
+      .then((data) => {
+        state.cafes = Array.isArray(data) ? data : [];
+        $("#status").hidden = true;
+        render();
+      })
+      .finally(() => {
+        cafeRequestPromise = null;
+      });
+    return cafeRequestPromise;
+  }
+  function refreshWhenPageReturns() {
+    if (document.hidden) return;
+    window.clearTimeout(focusRefreshTimer);
+    focusRefreshTimer = window.setTimeout(() => {
+      if (!document.hidden) loadCafes().catch(() => {});
+    }, 250);
+  }
   async function init() {
     try {
-      const data = await request("/api/cafes");
-      state.cafes = Array.isArray(data) ? data : [];
-      $("#status").hidden = true;
-      render();
+      await loadCafes();
       locateAutomaticallyIfAlreadyAllowed();
     } catch (error) {
       $("#status").className = "status error";
@@ -630,5 +650,9 @@
       $("#resultCount").textContent = "Gagal memuat";
     }
   }
+  window.addEventListener("focus", refreshWhenPageReturns);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshWhenPageReturns();
+  });
   init();
 })();

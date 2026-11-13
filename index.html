@@ -9,9 +9,9 @@
       content="Direktori kafe nyaman untuk kerja. Lokasi perangkat dapat dipakai untuk mencari tempat terdekat."
     />
     <title>Nyambung — Direktori kafe</title>
-    <link rel="stylesheet" href="styles.css?v=latest-data-1" />
+    <link rel="stylesheet" href="styles.css?v=search-2" />
     <script src="speedtest.js" defer></script>
-    <script src="app.js?v=latest-data-1" defer></script>
+    <script src="app.js?v=search-2" type="module"></script>
     <script src="public-speedtest.js" defer></script>
   </head>
   <body>
@@ -164,10 +164,13 @@
           ><input
             id="searchInput"
             type="search"
-            placeholder="Cari nama kafe atau area…"
+            placeholder="Nama kafe, area, atau Wi-Fi…"
             autocomplete="off"
-            aria-label="Cari nama kafe atau area"
+            maxlength="200"
+            aria-label="Cari nama kafe, area, alamat, atau Wi-Fi"
+            aria-describedby="searchHint"
         /></label>
+        <p id="searchHint" class="search-hint">Cari juga lewat alamat atau nama Wi-Fi. Huruf besar, tanda baca, spasi, dan salah ketik ringan tidak masalah.</p>
         <p
           id="locationStatus"
           class="location-status"
@@ -215,6 +218,7 @@
         <div id="emptyState" class="empty-state" hidden>
           <strong>Belum menemukan spot.</strong
           ><span>Coba kata kunci atau filter lain.</span>
+          <button id="searchAllAreas" class="secondary-button" type="button" hidden>Cari di semua area &amp; fasilitas</button>
         </div>
         <aside class="data-note">
           <strong>Catatan data</strong

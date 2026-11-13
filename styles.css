@@ -1114,3 +1114,37 @@ input:focus-visible {
     text-align: left;
   }
 }
+
+/* Search guidance and non-destructive detail recovery. */
+.search-hint {
+  margin: 8px 0 16px;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.detail-notice {
+  margin: 10px 28px 18px 0;
+  padding: 14px;
+  border: 1px solid #ded4a4;
+  border-radius: 12px;
+  background: #faf5df;
+  color: #554920;
+  overflow-wrap: anywhere;
+}
+.detail-notice p {
+  margin: 6px 0 12px;
+}
+.detail-notice button,
+.empty-state button {
+  max-width: 100%;
+  white-space: normal;
+  min-height: 44px;
+}
+.empty-state button {
+  margin: 14px auto 0;
+}
+
+.directory-search input {
+  min-width: 0;
+  font-size: 16px;
+}

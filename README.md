@@ -5,6 +5,8 @@ Direktori kafe yang nyaman untuk kerja, dibuat untuk layar ponsel. Situs live: *
 ## Yang tersedia
 
 - Pencarian, filter fasilitas, pengurutan berdasarkan pembaruan terbaru, Wi-Fi, rating Nyambung atau Google Maps, detail tempat, tautan Maps, serta tombol salin untuk password yang admin setujui untuk dibagikan. Waktu pembaruan terakhir per kafe dan tombol sinkronisasi membantu pengunjung memastikan mereka melihat data terbaru.
+- Pencarian mencakup nama kafe, area, alamat, dan SSID yang sudah dibagikan publik, tanpa mengindeks password. Pencarian mengabaikan kapitalisasi, aksen, tanda baca, dan variasi spasi; kata dapat dibalik urutannya dan satu salah ketik ringan ditoleransi untuk kata minimal lima huruf. Mode Rekomendasi mengutamakan kecocokan paling dekat saat mencari. Jika filter menyembunyikan hasil, tombol pencarian semua area/fasilitas mempertahankan kata kunci.
+- Permintaan daftar/detail yang gagal sementara dicoba ulang satu kali dengan batas waktu. Saat detail tetap gagal, modal menampilkan data dari daftar yang sudah dimuat dengan penanda yang jelas dan tombol coba lagi; password tidak direkayasa atau dianggap belum dibagikan hanya karena jaringan gagal.
 - Foto pada kartu dan detail. Admin dapat menempel URL HTTPS langsung atau mengunggah JPEG/PNG/WebP; foto dioptimalkan di browser dan disimpan di R2. Tempat tanpa foto menampilkan placeholder yang jujur.
 - Jika izin lokasi browser sudah pernah diberikan, lokasi perangkat dicari otomatis setelah daftar kafe dimuat; jika browser perlu meminta izin, permintaan baru dimulai setelah tombol ditekan. Header menampilkan area yang terdeteksi secara perkiraan, termasuk saat berada di luar Tebet. Bila GPS tidak tersedia, Tebet, Jakarta ditandai jelas sebagai fallback. Koordinat presisi tetap di memori tab; untuk nama area, hanya koordinat yang dibulatkan sekitar 100 m yang diteruskan melalui Worker ke Photon/OpenStreetMap. Nyambung tidak menyimpan titik GPS ke D1. Saat pengguna sendiri membuka petunjuk arah, titik asal diteruskan ke Google Maps. Jarak tetap garis lurus, bukan jarak rute, dan pengurutan terdekat memerlukan koordinat kafe.
 - Speedtest HTTP Cloudflare dengan warm-up, beberapa sampel, progres, pembatalan, dan dua mode pemakaian data. Angka mengukur koneksi perangkat saat tes, bukan menguji Wi-Fi kafe dari jauh.
@@ -63,10 +65,16 @@ Untuk situs yang sudah memiliki data, gunakan riwayat migrasi yang benar. `0004_
 
 ```sh
 npm run test:syntax
+npm run test:search
+npm run test:maps
 npm test
+npx playwright install chromium
+npm run test:browser
 ```
 
 `npm test` membuat konfigurasi, credential acak, D1, dan R2 **lokal sementara**, menjalankan CRUD, validasi, pemeriksaan pembulatan lokasi, impor foto, backup-restore berulang dan pelestarian rating/Wi-Fi privat, serta skenario penghapusan, lalu membersihkan semuanya. Pengujian memiliki guard localhost dan tidak memakai konfigurasi maupun database produksi. Pengujian hapus semua hanya dijalankan pada salinan lokal yang dibuat khusus untuk tes.
+
+`test:browser` memakai server lokal dan data fixture, bukan API produksi. Tes memeriksa pencarian variasi Citrasena/critasena, filter Klojen, modal detail, retry otomatis, fallback saat permintaan sengaja digagalkan, pemulihan manual, serta layout 320–1365 px. Jika memakai Chromium sistem, jalankan `CHROMIUM_PATH=/path/to/chromium npm run test:browser`.
 
 ## Keamanan dan data
 

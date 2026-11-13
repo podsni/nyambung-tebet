@@ -188,6 +188,15 @@ try {
   assert.ok(
     seeded.every((cafe) => !("password" in cafe) && !("wifiPassword" in cafe)),
   );
+  for (const cafe of seeded) {
+    const detail = await api(`/api/cafes/${encodeURIComponent(cafe.id)}`);
+    assert.equal(detail.response.status, 200);
+    assert.equal(detail.data.id, cafe.id);
+  }
+  const unknownDetail = await api(
+    `/api/cafes/${encodeURIComponent("missing/id")}`,
+  );
+  assert.equal(unknownDetail.response.status, 404);
   assert.ok(
     seeded.every((cafe) => cafe.photoUrl === "" && cafe.latitude === null),
   );
@@ -579,12 +588,27 @@ try {
   });
   const c = await api("/api/admin/cafes", {
     method: "POST",
-    body: cafeInput("Uji lokal tunggal"),
+    body: {
+      ...cafeInput("Uji lokal tunggal"),
+      area: "Kec. Klojen, Kota Malang",
+      ssid: "Citrasena Area",
+      wifiPublic: true,
+    },
   });
   assert.equal(b.response.status, 201);
   assert.equal(c.response.status, 201);
+  const cDetail = await api(`/api/cafes/${encodeURIComponent(c.data.id)}`);
+  assert.equal(cDetail.response.status, 200);
+  assert.equal(cDetail.data.id, c.data.id);
+  assert.equal(cDetail.data.ssid, "Citrasena Area");
+  assert.ok(!("password" in cDetail.data));
+  assert.equal(typeof cDetail.data.wifiPassword, "string");
   let snapshot = await list();
   assert.equal(snapshot.length, 31);
+  const cPublic = snapshot.find((cafe) => cafe.id === c.data.id);
+  assert.equal(cPublic.area, "Kec. Klojen, Kota Malang");
+  assert.equal(cPublic.ssid, "Citrasena Area");
+  assert.ok(!("password" in cPublic) && !("wifiPassword" in cPublic));
   const targetIds = [a.data.id, b.data.id, "backup-restore-local-test"];
   assert.equal(
     (

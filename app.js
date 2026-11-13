@@ -1,3 +1,5 @@
+import { searchCafe } from "./search.js?v=search-2";
+
 (() => {
   "use strict";
   const $ = (selector) => document.querySelector(selector);
@@ -149,15 +151,32 @@
     );
   }
   async function request(url) {
-    const response = await fetch(url, {
-      credentials: "same-origin",
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-    });
-    const body = await response.json().catch(() => null);
-    if (!response.ok)
-      throw new Error(body?.error || `Permintaan gagal (${response.status})`);
-    return body;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 10000);
+      try {
+        const response = await fetch(url, {
+          credentials: "same-origin",
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+          signal: controller.signal,
+        });
+        const body = await response.json().catch(() => null);
+        if (!response.ok || body === null) {
+          const error = new Error(body?.error || "Server belum dapat memuat data.");
+          error.retryable = response.status >= 500 || response.status === 429 || body === null;
+          throw error;
+        }
+        return body;
+      } catch (error) {
+        const transient = error instanceof TypeError || error.name === "AbortError" || error.retryable;
+        if (!transient || attempt === 1)
+          throw new Error(transient ? "Koneksi belum berhasil. Silakan coba lagi." : error.message);
+      } finally {
+        window.clearTimeout(timeout);
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 350));
+    }
   }
   function copyTextFallback(value) {
     const field = document.createElement("textarea");
@@ -221,13 +240,8 @@
     if (areas.includes(current)) select.value = current;
   }
   function matches(cafe) {
-    const query = $("#searchInput").value.trim().toLowerCase(),
-      area = $("#areaSelect").value;
-    if (
-      query &&
-      !`${cafe.name || ""} ${cafe.area || ""}`.toLowerCase().includes(query)
-    )
-      return false;
+    const area = $("#areaSelect").value;
+    if (!searchCafe(cafe, $("#searchInput").value)) return false;
     if (area !== "all" && cafe.area !== area) return false;
     switch (state.filter) {
       case "fast":
@@ -247,6 +261,10 @@
   function sorted(list) {
     const mode = $("#sortSelect").value;
     return [...list].sort((a, b) => {
+      if (mode === "recommended" && $("#searchInput").value.trim()) {
+        const relevance = searchCafe(a, $("#searchInput").value).score - searchCafe(b, $("#searchInput").value).score;
+        if (relevance) return relevance;
+      }
       if (mode === "updated") {
         const difference =
           (Date.parse(b.updatedAt || "") || 0) -
@@ -332,6 +350,7 @@
     $("#resultCount").textContent = `${results.length} tempat`;
     $("#emptyState").hidden = results.length !== 0;
     $("#cafeGrid").hidden = results.length === 0;
+    $("#searchAllAreas").hidden = $("#areaSelect").value === "all" && state.filter === "all";
   }
   async function showDetail(id) {
     const cafe = state.cafes.find((item) => String(item.id) === String(id));
@@ -339,14 +358,21 @@
     const modal = $("#detailModal"),
       ticket = ++state.detailRequest;
     $("#detailContent").innerHTML =
-      '<div class="modal-loading">Memuat detail…</div>';
-    modal.showModal();
+      `<button class="modal-close" type="button" data-close aria-label="Tutup detail">×</button><h2 id="detailTitle">${esc(cafe.name)}</h2><p>${esc(cafe.area)}</p><div class="modal-loading" role="status">Memuat detail terbaru…</div>`;
+    if (!modal.open) modal.showModal();
     try {
-      const detail = await request(`/api/cafes/${encodeURIComponent(id)}`);
+      let detail = cafe, detailError = false;
+      try {
+        const response = await request(`/api/cafes/${encodeURIComponent(id)}`);
+        if (String(response?.id) !== String(id)) throw new Error("Data detail tidak sesuai.");
+        detail = response;
+      } catch {
+        detailError = true;
+      }
       if (!modal.open || ticket !== state.detailRequest) return;
       const wifi = detail.wifiPassword
         ? `<div class="wifi-box"><strong>${esc(detail.ssid || "Wi-Fi")}</strong><button id="revealPassword" type="button">Tampilkan password</button><code id="wifiPassword" hidden>${esc(detail.wifiPassword)}</code><button id="copyWifiPassword" type="button" hidden>Salin password</button><span id="wifiCopyStatus" class="wifi-copy-status" role="status" aria-live="polite"></span></div>`
-        : '<div class="wifi-box"><strong>Password belum dibagikan</strong><span>Konfirmasi langsung ke kafe sebelum tersambung.</span></div>';
+        : `<div class="wifi-box">${detail.ssid ? `<strong>${esc(detail.ssid)}</strong>` : ""}<strong>${detailError && detail.hasPassword ? "Password belum berhasil dimuat" : "Password belum dibagikan"}</strong><span>Konfirmasi langsung ke kafe sebelum tersambung.</span></div>`;
       const provider = detail.provider
         ? `<p>Provider tercatat: <strong>${esc(detail.provider)}</strong>.</p>`
         : "";
@@ -379,6 +405,9 @@
       const ratingPanel = `<section class="rating-panel" aria-labelledby="ratingPanelTitle"><h3 id="ratingPanelTitle">Rating dari dua sumber</h3><p class="rating-source"><strong>Google Maps</strong><span>${esc(googleSummary)}</span></p><p class="rating-source"><strong>Nyambung</strong><span><b id="nyambungAggregate">${esc(communityCount ? `★ ${(communityRating || 0).toFixed(1)}/5` : "—")}</b> <span id="nyambungCount">${esc(communityCount ? `· ${communityCount} rating pengguna` : "· Belum ada rating pengguna")}</span></span></p><form id="ratingForm" data-cafe-id="${esc(detail.id)}"><fieldset class="rating-picker"><legend>Beri rating Nyambung</legend>${ratingOptions}</fieldset><button class="secondary-button" type="submit">${myRating ? "Perbarui rating" : "Kirim rating"}</button><p id="ratingStatus" class="rating-status" role="status" aria-live="polite">${myRating ? `Ratingmu saat ini ${myRating}/5; kamu dapat mengubahnya.` : "Satu rating per browser; rating Google Maps tidak berubah."}</p></form></section>`;
       $("#detailContent").innerHTML =
         `<button class="modal-close" type="button" data-close aria-label="Tutup detail">×</button>${photoMarkup(detail, true)}<p class="eyebrow">DETAIL SPOT</p><h2 id="detailTitle">${esc(detail.name || cafe.name)}</h2><p class="detail-area">${esc(detail.area || "")}${detail.hours ? ` · ${esc(detail.hours)}` : ""}</p>${detail.address ? `<p class="detail-address">Alamat: ${esc(detail.address)}</p>` : ""}${ratingPanel}<div class="detail-stats"><div><strong>${speed(detail.down, "Mbps")}</strong><span>Download</span></div><div><strong>${speed(detail.up, "Mbps")}</strong><span>Upload</span></div><div><strong>${speed(detail.ping, "ms")}</strong><span>Ping</span></div></div><section><h3>Fasilitas & suasana</h3><p>${esc(label("outlets", detail.outlets))} · ${esc(label("prayer", detail.prayer))} · ${esc(label("stability", detail.stability))}${detail.comfort ? ` · Kenyamanan ${esc(detail.comfort)}/5` : ""}${detail.smoking ? ` · ${esc(detail.smoking)}` : ""}</p></section><section><h3>Wi-Fi</h3>${wifi}${provider}${tested}<p>Data berdasarkan catatan kunjungan dan dapat berubah.</p></section><div class="modal-actions"><a class="primary-button" href="${esc(mapUrl(detail))}" target="_blank" rel="noopener">Buka petunjuk arah ↗</a><button class="secondary-button" type="button" data-close>Tutup</button></div>`;
+      if (detailError) {
+        $("#detailContent").insertAdjacentHTML("afterbegin", `<div class="detail-notice" role="status"><strong>Detail terbaru belum berhasil dimuat.</strong><p>Informasi di bawah berasal dari daftar yang sudah tampil. Password Wi-Fi baru dapat dilihat setelah tersambung kembali.</p><button class="secondary-button" type="button" data-retry-detail="${esc(id)}">Coba muat lagi</button></div>`);
+      }
       $("#revealPassword")?.addEventListener("click", () => {
         $("#wifiPassword").hidden = false;
         $("#copyWifiPassword").hidden = false;
@@ -414,7 +443,7 @@
     } catch (error) {
       if (!modal.open || ticket !== state.detailRequest) return;
       $("#detailContent").innerHTML =
-        `<button class="modal-close" type="button" data-close aria-label="Tutup detail">×</button><p class="eyebrow">DETAIL SPOT</p><h2>Detail tidak tersedia</h2><p class="error-text">${esc(error.message)}</p><button class="secondary-button" type="button" data-close>Tutup</button>`;
+        `<button class="modal-close" type="button" data-close aria-label="Tutup detail">×</button><p class="eyebrow">DETAIL SPOT</p><h2 id="detailTitle">${esc(cafe.name)}</h2><p class="error-text">Detail belum dapat ditampilkan. Silakan coba lagi.</p><button class="secondary-button" type="button" data-retry-detail="${esc(id)}">Coba muat lagi</button>`;
     }
   }
   function reset() {
@@ -559,6 +588,8 @@
   document.addEventListener("click", (event) => {
     const detail = event.target.closest("[data-detail]");
     if (detail) showDetail(detail.dataset.detail);
+    const retry = event.target.closest("[data-retry-detail]");
+    if (retry) showDetail(retry.dataset.retryDetail);
     if (event.target.closest("[data-close]") && $("#detailModal").open)
       $("#detailModal").close();
   });
@@ -634,6 +665,12 @@
   $("#areaSelect").addEventListener("change", render);
   $("#sortSelect").addEventListener("change", render);
   $("#clearFilters").addEventListener("click", reset);
+  $("#searchAllAreas").addEventListener("click", () => {
+    state.filter = "all";
+    $("#areaSelect").value = "all";
+    document.querySelectorAll(".filter").forEach((button) => button.classList.toggle("active", button.dataset.filter === "all"));
+    render();
+  });
   $("#refreshDataButton").addEventListener("click", refreshData);
   $("#locationButton").addEventListener("click", () => locate());
   $("#clearLocation").addEventListener("click", () => {

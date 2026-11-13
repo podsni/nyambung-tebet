@@ -4,6 +4,7 @@ import { gzipSync } from "node:zlib";
 const sourceFiles = [
   "index.html",
   "app.js",
+  "search.js",
   "styles.css",
   "admin.html",
   "admin.js",

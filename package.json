@@ -12,9 +12,12 @@
     "dev": "npm run build && wrangler dev",
     "test": "node tests/api-integration.mjs",
     "test:maps": "node tests/google-maps-import.mjs",
-    "test:syntax": "node --check worker.js && node --check app.js && node --check admin.js && node --check admin-enhancements.js && node --check speedtest.js && node --check public-speedtest.js"
+    "test:search": "node tests/search.mjs",
+    "test:browser": "node tests/browser-search.mjs",
+    "test:syntax": "node --check worker.js && node --check app.js && node --check search.js && node --check admin.js && node --check admin-enhancements.js && node --check speedtest.js && node --check public-speedtest.js"
   },
   "devDependencies": {
+    "playwright": "^1.65.0",
     "wrangler": "4.160.1"
   }
 }
